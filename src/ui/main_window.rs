@@ -1,25 +1,29 @@
 use crate::config::{get_track_visual_config, LabelColumnPosition, TextAlignment, RUNTIME_CONFIG};
 use crate::json_loader::EventTrack;
-use crate::notification_logic::{toggle_event_tracking, toggle_oneshot_tracking};
+use crate::notification_logic::{
+    toggle_event_favorite, toggle_event_tracking, toggle_oneshot_tracking,
+};
 use crate::time_utils::{format_time_only, get_current_unix_time};
 use crate::ui::time_ruler::render_time_ruler;
 use nexus::imgui::{Condition, Key, MenuItem, MouseButton, StyleVar, Ui, Window, WindowFlags};
 use std::cell::RefCell;
 use std::collections::HashSet;
 
-use std::collections::HashSet as StdHashSet;
 use crate::config::TrackedEventId;
+use std::collections::HashSet as StdHashSet;
 
 // Thread-local storage for right-clicked event info
-// Stores (track_name, event_name, is_currently_tracked, is_oneshot_tracked)
+// Stores (track_name, event_name, is_currently_tracked, is_oneshot_tracked, is_favorite)
 thread_local! {
-    static CONTEXT_EVENT: RefCell<Option<(String, String, bool, bool)>> = const { RefCell::new(None) };
+    static CONTEXT_EVENT: RefCell<Option<(String, String, bool, bool, bool)>> = const { RefCell::new(None) };
     static OPEN_EVENT_MENU: RefCell<bool> = const { RefCell::new(false) };
     static PENDING_TRACK_TOGGLE: RefCell<Option<(String, String, bool)>> = const { RefCell::new(None) }; // (track, event, is_oneshot)
+    static PENDING_FAVORITE_TOGGLE: RefCell<Option<(String, String)>> = const { RefCell::new(None) };
     static PENDING_WIKI_OPEN: RefCell<Option<String>> = const { RefCell::new(None) };
     // Cached tracked events for the current frame (to avoid re-locking)
     static CACHED_TRACKED_EVENTS: RefCell<StdHashSet<TrackedEventId>> = RefCell::new(StdHashSet::new());
     static CACHED_ONESHOT_EVENTS: RefCell<StdHashSet<TrackedEventId>> = RefCell::new(StdHashSet::new());
+    static CACHED_FAVORITE_EVENTS: RefCell<StdHashSet<TrackedEventId>> = RefCell::new(StdHashSet::new());
     // Cached copy setting for the current frame
     static CACHED_COPY_WITH_EVENT_NAME: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     // Track ESC key state for debouncing
@@ -35,6 +39,11 @@ pub fn render_main_window(ui: &Ui) {
         } else {
             toggle_event_tracking(&track_name, &event_name);
         }
+    }
+
+    let pending_favorite = PENDING_FAVORITE_TOGGLE.with(|p| p.borrow_mut().take());
+    if let Some((track_name, event_name)) = pending_favorite {
+        toggle_event_favorite(&track_name, &event_name);
     }
 
     // Handle pending wiki open
@@ -69,6 +78,9 @@ pub fn render_main_window(ui: &Ui) {
     });
     CACHED_ONESHOT_EVENTS.with(|c| {
         *c.borrow_mut() = config.oneshot_events.clone();
+    });
+    CACHED_FAVORITE_EVENTS.with(|c| {
+        *c.borrow_mut() = config.favorite_events.clone();
     });
 
     // Cache copy setting for this frame
@@ -115,7 +127,7 @@ pub fn render_main_window(ui: &Ui) {
     if config.is_window_locked {
         window = window.title_bar(false);
     }
-    
+
     window
         .flags(window_flags)
         .draw_background(!config.hide_background)
@@ -135,6 +147,10 @@ pub fn render_main_window(ui: &Ui) {
                 ui.open_popup("event_track_menu");
             } else if ui.is_window_hovered() && ui.is_mouse_clicked(MouseButton::Right) {
                 ui.open_popup("window_context_menu");
+            }
+
+            if !config.setup_onboarding_seen {
+                ui.open_popup("event_timers_onboarding");
             }
 
             ui.popup("window_context_menu", || {
@@ -157,7 +173,9 @@ pub fn render_main_window(ui: &Ui) {
             // Event tracking context menu
             ui.popup("event_track_menu", || {
                 CONTEXT_EVENT.with(|e| {
-                    if let Some((track_name, event_name, was_tracked, was_oneshot)) = e.borrow().clone() {
+                    if let Some((track_name, event_name, was_tracked, was_oneshot, was_favorite)) =
+                        e.borrow().clone()
+                    {
                         // Track/Untrack option
                         let label = if was_tracked {
                             format!("Untrack: {}", event_name)
@@ -167,7 +185,8 @@ pub fn render_main_window(ui: &Ui) {
 
                         if MenuItem::new(&label).build(ui) {
                             PENDING_TRACK_TOGGLE.with(|p| {
-                                *p.borrow_mut() = Some((track_name.clone(), event_name.clone(), false));
+                                *p.borrow_mut() =
+                                    Some((track_name.clone(), event_name.clone(), false));
                             });
                         }
 
@@ -181,9 +200,22 @@ pub fn render_main_window(ui: &Ui) {
 
                             if MenuItem::new(&oneshot_label).build(ui) {
                                 PENDING_TRACK_TOGGLE.with(|p| {
-                                    *p.borrow_mut() = Some((track_name.clone(), event_name.clone(), true));
+                                    *p.borrow_mut() =
+                                        Some((track_name.clone(), event_name.clone(), true));
                                 });
                             }
+                        }
+
+                        let favorite_label = if was_favorite {
+                            format!("Unfavorite: {}", event_name)
+                        } else {
+                            format!("Favorite: {}", event_name)
+                        };
+
+                        if MenuItem::new(&favorite_label).build(ui) {
+                            PENDING_FAVORITE_TOGGLE.with(|p| {
+                                *p.borrow_mut() = Some((track_name.clone(), event_name.clone()));
+                            });
                         }
 
                         ui.separator();
@@ -197,7 +229,21 @@ pub fn render_main_window(ui: &Ui) {
                     }
                 });
             });
-            
+
+            ui.popup("event_timers_onboarding", || {
+                ui.text("Event Timers setup");
+                ui.separator();
+                ui.text("Right-click events to track, track next only, or favorite them.");
+                ui.text("Tracked events can show notifications and appear in the upcoming panel.");
+                ui.text("Favorites get a gold highlight in the main timeline.");
+                ui.text("Use Settings > Notifications & Tracking to tune reminders.");
+                ui.spacing();
+                if ui.button("Got it") {
+                    config.setup_onboarding_seen = true;
+                    ui.close_current_popup();
+                }
+            });
+
             if config.show_time_ruler {
                 // Calculate label offset for time ruler alignment
                 let label_offset = match label_column_pos {
@@ -214,9 +260,9 @@ pub fn render_main_window(ui: &Ui) {
                     config.time_ruler_show_current_time,
                 );
             }
-            
+
             let _style_token = ui.push_style_var(StyleVar::ItemSpacing([0.0, 0.0]));
-            
+
             // Determine layout based on label column position
             match label_column_pos {
                 LabelColumnPosition::None => {
@@ -335,13 +381,13 @@ fn render_timeline_content(
 ) {
     let mut rendered_categories: HashSet<String> = HashSet::new();
     let ordered_categories = config.category_order.clone();
-    
+
     // First render categories in the defined order
     for category in &ordered_categories {
         if rendered_categories.contains(category) {
             continue;
         }
-        
+
         render_tracks_for_category(
             ui,
             config,
@@ -367,11 +413,14 @@ fn render_timeline_content(
             label_column_active,
         );
     }
-    
+
     // Then render any tracks with categories not in the order
     for track in config.tracks.iter() {
         if !rendered_categories.contains(&track.category) && track.visible {
-            let is_category_visible = *config.category_visibility.get(&track.category).unwrap_or(&true);
+            let is_category_visible = *config
+                .category_visibility
+                .get(&track.category)
+                .unwrap_or(&true);
             if is_category_visible {
                 render_tracks_for_category(
                     ui,
@@ -434,7 +483,7 @@ fn render_with_label_column_left(
     // Use columns for side-by-side layout without breaking scrolling
     ui.columns(2, "label_timeline_cols", false);
     ui.set_column_width(0, label_column_width);
-    
+
     // Label column (first column)
     render_label_column(
         ui,
@@ -451,9 +500,9 @@ fn render_with_label_column_left(
         label_text_color,
         label_category_color,
     );
-    
+
     ui.next_column();
-    
+
     // Timeline (second column)
     render_timeline_content(
         ui,
@@ -477,7 +526,7 @@ fn render_with_label_column_left(
         header_padding,
         true, // label_column_active = true
     );
-    
+
     ui.columns(1, "", false); // Reset to single column
 }
 
@@ -512,11 +561,11 @@ fn render_with_label_column_right(
 ) {
     let available_width = ui.content_region_avail()[0];
     let timeline_width = available_width - label_column_width;
-    
+
     // Use columns for side-by-side layout without breaking scrolling
     ui.columns(2, "timeline_label_cols", false);
     ui.set_column_width(0, timeline_width);
-    
+
     // Timeline (first column)
     render_timeline_content(
         ui,
@@ -540,9 +589,9 @@ fn render_with_label_column_right(
         header_padding,
         true, // label_column_active = true
     );
-    
+
     ui.next_column();
-    
+
     // Label column (second column)
     render_label_column(
         ui,
@@ -559,7 +608,7 @@ fn render_with_label_column_right(
         label_text_color,
         label_category_color,
     );
-    
+
     ui.columns(1, "", false); // Reset to single column
 }
 
@@ -581,13 +630,13 @@ fn render_label_column(
     let mut rendered_categories: HashSet<String> = HashSet::new();
     let ordered_categories = config.category_order.clone();
     let mut needs_spacing = false;
-    
+
     // Render in order
     for category in &ordered_categories {
         if rendered_categories.contains(category) {
             continue;
         }
-        
+
         render_label_column_for_category(
             ui,
             config,
@@ -607,11 +656,14 @@ fn render_label_column(
             label_category_color,
         );
     }
-    
+
     // Render remaining categories
     for track in config.tracks.iter() {
         if !rendered_categories.contains(&track.category) && track.visible {
-            let is_category_visible = *config.category_visibility.get(&track.category).unwrap_or(&true);
+            let is_category_visible = *config
+                .category_visibility
+                .get(&track.category)
+                .unwrap_or(&true);
             if is_category_visible {
                 render_label_column_for_category(
                     ui,
@@ -657,77 +709,89 @@ fn render_label_column_for_category(
     if rendered_categories.contains(category) {
         return;
     }
-    
+
     let is_category_visible = *config.category_visibility.get(category).unwrap_or(&true);
     if !is_category_visible {
         rendered_categories.insert(category.to_string());
         return;
     }
-    
+
     let mut first_visible_in_category = true;
     let draw_list = ui.get_window_draw_list();
-    
+
     for track in config.tracks.iter() {
         if track.category != category || !track.visible {
             continue;
         }
-        
+
         if first_visible_in_category {
             if *needs_spacing {
                 ui.dummy([0.0, spacing_between]);
             }
-            
+
             if show_headers && !category.is_empty() {
                 // Category header with same height as timeline header
                 let cursor_pos = ui.cursor_screen_pos();
                 let available_width = ui.content_region_avail()[0];
                 let text_size = ui.calc_text_size(category);
                 let header_height = text_size[1] + 10.0;
-                
+
                 // Background for category (if enabled)
                 if label_bg_color[3] > 0.0 {
-                    draw_list.add_rect(
-                        cursor_pos,
-                        [cursor_pos[0] + available_width, cursor_pos[1] + header_height],
-                        label_bg_color,
-                    ).filled(true).build();
+                    draw_list
+                        .add_rect(
+                            cursor_pos,
+                            [
+                                cursor_pos[0] + available_width,
+                                cursor_pos[1] + header_height,
+                            ],
+                            label_bg_color,
+                        )
+                        .filled(true)
+                        .build();
                 }
-                
+
                 // Category text (if enabled) - uses separate category color
                 if label_show_category {
                     // Note: Font scaling in nexus imgui is limited, using regular text
                     let text_pos = [cursor_pos[0] + 5.0, cursor_pos[1] + 5.0];
                     draw_list.add_text(text_pos, label_category_color, category);
                 }
-                
+
                 ui.dummy([0.0, header_height]);
             }
-            
+
             first_visible_in_category = false;
             *needs_spacing = true;
         } else {
             ui.dummy([0.0, spacing_same]);
         }
-        
+
         // Track label - match exact height of timeline track
         let track_height = if override_all_track_heights {
             global_track_height
         } else {
             track.height
         };
-        
+
         let cursor_pos = ui.cursor_screen_pos();
         let available_width = ui.content_region_avail()[0];
-        
+
         // Draw background matching track background
         if label_bg_color[3] > 0.0 {
-            draw_list.add_rect(
-                cursor_pos,
-                [cursor_pos[0] + available_width, cursor_pos[1] + track_height],
-                label_bg_color,
-            ).filled(true).build();
+            draw_list
+                .add_rect(
+                    cursor_pos,
+                    [
+                        cursor_pos[0] + available_width,
+                        cursor_pos[1] + track_height,
+                    ],
+                    label_bg_color,
+                )
+                .filled(true)
+                .build();
         }
-        
+
         // Draw track name (if enabled) - vertically centered
         if label_show_track {
             // Note: Font scaling in nexus imgui is limited, using regular text
@@ -736,11 +800,11 @@ fn render_label_column_for_category(
             let text_pos = [cursor_pos[0] + 5.0, cursor_pos[1] + text_y_offset];
             draw_list.add_text(text_pos, label_text_color, &track.name);
         }
-        
+
         // Dummy with EXACT track height to match timeline
         ui.dummy([available_width, track_height]);
     }
-    
+
     rendered_categories.insert(category.to_string());
 }
 
@@ -772,13 +836,13 @@ fn render_tracks_for_category(
     if rendered_categories.contains(category) {
         return;
     }
-    
+
     let is_category_visible = *config.category_visibility.get(category).unwrap_or(&true);
     if !is_category_visible {
         rendered_categories.insert(category.to_string());
         return;
     }
-    
+
     let mut first_visible_in_category = true;
     let needs_spacing = !rendered_categories.is_empty();
 
@@ -801,7 +865,7 @@ fn render_tracks_for_category(
                 let header_height = text_size[1] + 10.0;
                 ui.dummy([0.0, header_height]);
             }
-            
+
             first_visible_in_category = false;
         } else {
             ui.dummy([0.0, spacing_same]);
@@ -831,33 +895,36 @@ fn render_tracks_for_category(
 fn render_category_header(ui: &Ui, category: &str, alignment: TextAlignment, padding: f32) {
     let available_width = ui.content_region_avail()[0];
     let text_size = ui.calc_text_size(category);
-    
+
     // Calculate X position based on alignment
     let x_offset = match alignment {
         TextAlignment::Left => padding,
         TextAlignment::Center => (available_width - text_size[0]) / 2.0,
         TextAlignment::Right => available_width - text_size[0] - padding,
     };
-    
+
     // Draw using background draw list for full width coverage
     let draw_list = ui.get_window_draw_list();
     let cursor_pos = ui.cursor_screen_pos();
     let header_height = text_size[1] + 10.0;
-    
+
     // Semi-transparent background
     draw_list
         .add_rect(
             cursor_pos,
-            [cursor_pos[0] + available_width, cursor_pos[1] + header_height],
+            [
+                cursor_pos[0] + available_width,
+                cursor_pos[1] + header_height,
+            ],
             [0.15, 0.15, 0.15, 0.8],
         )
         .filled(true)
         .build();
-    
+
     // Category text with alignment
     let text_pos = [cursor_pos[0] + x_offset, cursor_pos[1] + 5.0];
     draw_list.add_text(text_pos, [0.8, 0.8, 0.2, 1.0], category);
-    
+
     ui.dummy([available_width, header_height]);
 }
 
@@ -892,8 +959,14 @@ fn render_timeline_track(
     // Background
     draw_list
         .add_rect(
-            [cursor_pos[0] - visual.padding, cursor_pos[1] - visual.padding],
-            [cursor_pos[0] + available_width + visual.padding, cursor_pos[1] + track_height + visual.padding],
+            [
+                cursor_pos[0] - visual.padding,
+                cursor_pos[1] - visual.padding,
+            ],
+            [
+                cursor_pos[0] + available_width + visual.padding,
+                cursor_pos[1] + track_height + visual.padding,
+            ],
             visual.background_color,
         )
         .filled(true)
@@ -908,6 +981,11 @@ fn render_timeline_track(
             continue;
         }
 
+        let event_id = TrackedEventId::new(&track.name, &event.name);
+        let is_tracked = CACHED_TRACKED_EVENTS.with(|c| c.borrow().contains(&event_id));
+        let is_oneshot = CACHED_ONESHOT_EVENTS.with(|c| c.borrow().contains(&event_id));
+        let is_favorite = CACHED_FAVORITE_EVENTS.with(|c| c.borrow().contains(&event_id));
+
         let time_in_cycle = elapsed_since_base.rem_euclid(event.cycle_duration);
         let event_start_in_cycle = event.start_offset;
         let time_to_event_start = event_start_in_cycle - time_in_cycle;
@@ -921,8 +999,9 @@ fn render_timeline_track(
 
         for &time_offset in &offsets {
             // Early exit optimization
-            if time_offset < -time_before_current as i64 - event.duration 
-                || time_offset > time_after_current as i64 {
+            if time_offset < -time_before_current as i64 - event.duration
+                || time_offset > time_after_current as i64
+            {
                 continue;
             }
 
@@ -936,10 +1015,10 @@ fn render_timeline_track(
                 continue;
             }
 
-            let is_active = time_in_cycle >= event.start_offset 
+            let is_active = time_in_cycle >= event.start_offset
                 && time_in_cycle < event.start_offset + event.duration;
             let is_this_occurrence_active = is_active && time_offset == time_to_event_start;
-            
+
             let bar_color = if is_this_occurrence_active {
                 event.color.to_array()
             } else {
@@ -950,32 +1029,68 @@ fn render_timeline_track(
                     event.color.a,
                 ]
             };
-            
+
             let bar_min = [event_start_x.max(cursor_pos[0]), cursor_pos[1]];
             let bar_max = [
                 event_end_x.min(cursor_pos[0] + available_width),
                 cursor_pos[1] + track_height,
             ];
 
-            draw_list.add_rect(bar_min, bar_max, bar_color).filled(true).build();
-            
+            draw_list
+                .add_rect(bar_min, bar_max, bar_color)
+                .filled(true)
+                .build();
+
             if draw_event_borders {
-                draw_list.add_rect(bar_min, bar_max, event_border_color)
+                draw_list
+                    .add_rect(bar_min, bar_max, event_border_color)
                     .thickness(event_border_thickness)
                     .build();
             }
-            
+
+            if is_tracked || is_oneshot {
+                let highlight_color = if is_oneshot {
+                    [1.0, 0.65, 0.2, 1.0]
+                } else {
+                    [0.35, 0.8, 1.0, 1.0]
+                };
+                draw_list
+                    .add_rect(bar_min, bar_max, highlight_color)
+                    .thickness(event_border_thickness.max(2.0))
+                    .build();
+            }
+
+            if is_favorite && bar_max[0] - bar_min[0] > 6.0 && bar_max[1] - bar_min[1] > 6.0 {
+                draw_list
+                    .add_rect(
+                        [bar_min[0] + 2.0, bar_min[1] + 2.0],
+                        [bar_max[0] - 2.0, bar_max[1] - 2.0],
+                        [1.0, 0.82, 0.18, 1.0],
+                    )
+                    .thickness(event_border_thickness.max(2.5))
+                    .build();
+            }
+
             // Use window bounds in screen space for clipping (accounts for scroll automatically)
             let window_pos = ui.window_pos();
             let window_size = ui.window_size();
-            
+
             let window_clip_min = [window_pos[0], window_pos[1]];
-            let window_clip_max = [window_pos[0] + window_size[0], window_pos[1] + window_size[1]];
-            
+            let window_clip_max = [
+                window_pos[0] + window_size[0],
+                window_pos[1] + window_size[1],
+            ];
+
             // Intersect event bar bounds with window bounds for text clipping
-            let text_clip_min = [bar_min[0].max(window_clip_min[0]), bar_min[1].max(window_clip_min[1])];
-            let text_clip_max = [bar_max[0].min(window_clip_max[0]), bar_max[1].min(window_clip_max[1])];
-            
+            let text_clip_min = [
+                bar_min[0].max(window_clip_min[0]),
+                bar_min[1].max(window_clip_min[1]),
+            ];
+            let text_clip_max = [
+                bar_max[0].min(window_clip_max[0]),
+                bar_max[1].min(window_clip_max[1]),
+            ];
+
             draw_list.with_clip_rect(text_clip_min, text_clip_max, || {
                 let text_color = get_text_color_for_bg(bar_color);
                 let text_size = ui.calc_text_size(&event.name);
@@ -990,20 +1105,30 @@ fn render_timeline_track(
 
     // Current time line
     let current_time_x = cursor_pos[0] + (time_position * available_width);
-    draw_list.add_line(
-        [current_time_x, cursor_pos[1]],
-        [current_time_x, cursor_pos[1] + track_height],
-        [1.0, 0.0, 0.0, 1.0],
-    )
-    .thickness(2.0)
-    .build();
+    draw_list
+        .add_line(
+            [current_time_x, cursor_pos[1]],
+            [current_time_x, cursor_pos[1] + track_height],
+            [1.0, 0.0, 0.0, 1.0],
+        )
+        .thickness(2.0)
+        .build();
 
     ui.dummy([available_width, track_height]);
 
     // Tooltip handling
     if ui.is_item_hovered() {
-        handle_track_tooltip(ui, track, current_time, time_before_current, time_after_current, 
-                           view_range, cursor_pos, available_width, pixels_per_second);
+        handle_track_tooltip(
+            ui,
+            track,
+            current_time,
+            time_before_current,
+            time_after_current,
+            view_range,
+            cursor_pos,
+            available_width,
+            pixels_per_second,
+        );
     }
 }
 
@@ -1039,8 +1164,9 @@ fn handle_track_tooltip(
         ];
 
         for &time_offset in &offsets {
-            if time_offset < -time_before_current as i64 - event.duration 
-                || time_offset > time_after_current as i64 {
+            if time_offset < -time_before_current as i64 - event.duration
+                || time_offset > time_after_current as i64
+            {
                 continue;
             }
 
@@ -1054,21 +1180,36 @@ fn handle_track_tooltip(
                 // Calculate time info for THIS specific occurrence bar
                 let this_occurrence_start = current_time + time_offset;
                 let this_occurrence_end = this_occurrence_start + event.duration;
-                
+
                 // Determine display text based on timing
-                let (timing_text, _is_active_now) = if current_time >= this_occurrence_start && current_time < this_occurrence_end {
+                let (timing_text, _is_active_now) = if current_time >= this_occurrence_start
+                    && current_time < this_occurrence_end
+                {
                     // Currently active
                     let seconds_remaining = this_occurrence_end - current_time;
                     let minutes_remaining = (seconds_remaining / 60) as i32;
-                    (format!("Active now ({}m remaining)", minutes_remaining), true)
+                    (
+                        format!("Active now ({}m remaining)", minutes_remaining),
+                        true,
+                    )
                 } else if this_occurrence_start > current_time {
                     // Future occurrence
                     let seconds_until = this_occurrence_start - current_time;
                     let minutes_until = (seconds_until / 60) as i32;
-                    (format!("Starts: {} (in {}m)", format_time_only(this_occurrence_start), minutes_until), false)
+                    (
+                        format!(
+                            "Starts: {} (in {}m)",
+                            format_time_only(this_occurrence_start),
+                            minutes_until
+                        ),
+                        false,
+                    )
                 } else {
                     // Past occurrence
-                    (format!("Ended: {}", format_time_only(this_occurrence_end)), false)
+                    (
+                        format!("Ended: {}", format_time_only(this_occurrence_end)),
+                        false,
+                    )
                 };
 
                 ui.tooltip(|| {
@@ -1097,14 +1238,18 @@ fn handle_track_tooltip(
                 if ui.is_mouse_clicked(MouseButton::Right) {
                     // Check tracked status from cached value (avoids deadlock)
                     let event_id = TrackedEventId::new(&track.name, &event.name);
-                    let is_tracked = CACHED_TRACKED_EVENTS.with(|c| {
-                        c.borrow().contains(&event_id)
-                    });
-                    let is_oneshot = CACHED_ONESHOT_EVENTS.with(|c| {
-                        c.borrow().contains(&event_id)
-                    });
+                    let is_tracked = CACHED_TRACKED_EVENTS.with(|c| c.borrow().contains(&event_id));
+                    let is_oneshot = CACHED_ONESHOT_EVENTS.with(|c| c.borrow().contains(&event_id));
+                    let is_favorite =
+                        CACHED_FAVORITE_EVENTS.with(|c| c.borrow().contains(&event_id));
                     CONTEXT_EVENT.with(|e| {
-                        *e.borrow_mut() = Some((track.name.clone(), event.name.clone(), is_tracked, is_oneshot));
+                        *e.borrow_mut() = Some((
+                            track.name.clone(),
+                            event.name.clone(),
+                            is_tracked,
+                            is_oneshot,
+                            is_favorite,
+                        ));
                     });
                     OPEN_EVENT_MENU.with(|f| {
                         *f.borrow_mut() = true;

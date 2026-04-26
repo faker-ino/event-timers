@@ -2,7 +2,12 @@ use nexus::paths::get_addon_dir;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::{collections::{HashMap, HashSet}, fs, hash::Hash, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    hash::Hash,
+    path::PathBuf,
+};
 
 use crate::json_loader::{load_tracks_from_json, EventTrack};
 
@@ -64,7 +69,9 @@ pub struct ReminderConfig {
     pub ongoing_interval_minutes: u32,
 }
 
-fn default_ongoing_interval() -> u32 { 5 }
+fn default_ongoing_interval() -> u32 {
+    5
+}
 
 impl Default for ReminderConfig {
     fn default() -> Self {
@@ -152,18 +159,45 @@ pub struct NotificationConfig {
 
     #[serde(default = "default_toast_track_color")]
     pub toast_track_color: [f32; 4],
+
+    /// Max minutes after start that a minutes_before=0 reminder can still show.
+    #[serde(default = "default_happening_now_grace_minutes")]
+    pub happening_now_grace_minutes: u32,
 }
 
-fn default_toast_duration() -> f32 { 5.0 }
-fn default_max_toasts() -> usize { 3 }
-fn default_upcoming_panel_size() -> [f32; 2] { [300.0, 200.0] }
-fn default_max_upcoming() -> usize { 10 }
-fn default_toast_size() -> [f32; 2] { [280.0, 80.0] }
-fn default_toast_bg_color() -> [f32; 4] { [0.1, 0.1, 0.1, 0.95] }
-fn default_toast_text_scale() -> f32 { 1.2 }
-fn default_toast_title_color() -> [f32; 4] { [1.0, 0.8, 0.2, 1.0] }
-fn default_toast_time_color() -> [f32; 4] { [0.5, 1.0, 0.5, 1.0] }
-fn default_toast_track_color() -> [f32; 4] { [0.7, 0.7, 0.7, 1.0] }
+fn default_toast_duration() -> f32 {
+    5.0
+}
+fn default_max_toasts() -> usize {
+    3
+}
+fn default_upcoming_panel_size() -> [f32; 2] {
+    [300.0, 200.0]
+}
+fn default_max_upcoming() -> usize {
+    10
+}
+fn default_toast_size() -> [f32; 2] {
+    [280.0, 80.0]
+}
+fn default_toast_bg_color() -> [f32; 4] {
+    [0.1, 0.1, 0.1, 0.95]
+}
+fn default_toast_text_scale() -> f32 {
+    1.2
+}
+fn default_toast_title_color() -> [f32; 4] {
+    [1.0, 0.8, 0.2, 1.0]
+}
+fn default_toast_time_color() -> [f32; 4] {
+    [0.5, 1.0, 0.5, 1.0]
+}
+fn default_toast_track_color() -> [f32; 4] {
+    [0.7, 0.7, 0.7, 1.0]
+}
+fn default_happening_now_grace_minutes() -> u32 {
+    10
+}
 
 impl Default for NotificationConfig {
     fn default() -> Self {
@@ -184,6 +218,7 @@ impl Default for NotificationConfig {
             toast_title_color: default_toast_title_color(),
             toast_time_color: default_toast_time_color(),
             toast_track_color: default_toast_track_color(),
+            happening_now_grace_minutes: default_happening_now_grace_minutes(),
         }
     }
 }
@@ -228,8 +263,12 @@ pub struct TrackVisualConfig {
     pub padding: f32,
 }
 
-fn default_track_bg_color() -> [f32; 4] { [0.2, 0.2, 0.2, 1.0] }
-fn default_track_padding() -> f32 { 5.0 }
+fn default_track_bg_color() -> [f32; 4] {
+    [0.2, 0.2, 0.2, 1.0]
+}
+fn default_track_padding() -> f32 {
+    5.0
+}
 
 impl Default for TrackVisualConfig {
     fn default() -> Self {
@@ -326,6 +365,8 @@ pub struct UserConfig {
     pub close_on_escape: bool,
     #[serde(default)]
     pub copy_with_event_name: bool,
+    #[serde(default)]
+    pub setup_onboarding_seen: bool,
 
     // === Time Ruler Settings ===
     #[serde(default)]
@@ -338,27 +379,58 @@ pub struct UserConfig {
     pub tracked_events: HashSet<TrackedEventId>,
 
     #[serde(default)]
+    pub favorite_events: HashSet<TrackedEventId>,
+
+    #[serde(default)]
     pub oneshot_events: HashSet<TrackedEventId>,
 
     #[serde(default)]
     pub notification_config: NotificationConfig,
 }
 
-fn default_global_track_bg() -> [f32; 4] { [0.2, 0.2, 0.2, 0.2] } // #33333333
-fn default_border_color() -> [f32; 4] { [0.0, 0.0, 0.0, 1.0] } // #000000FF
-fn default_border_thickness() -> f32 { 1.0 }
-fn default_height() -> f32 { 40.0 }
-fn default_label_column_width() -> f32 { 150.0 }
-fn default_label_text_size() -> f32 { 1.0 }
-fn default_label_text_color() -> [f32; 4] { [1.0, 1.0, 1.0, 1.0] } // White
-fn default_label_category_color() -> [f32; 4] { [0.8, 0.8, 0.2, 1.0] } // Yellow like default
+fn default_global_track_bg() -> [f32; 4] {
+    [0.2, 0.2, 0.2, 0.2]
+} // #33333333
+fn default_border_color() -> [f32; 4] {
+    [0.0, 0.0, 0.0, 1.0]
+} // #000000FF
+fn default_border_thickness() -> f32 {
+    1.0
+}
+fn default_height() -> f32 {
+    40.0
+}
+fn default_label_column_width() -> f32 {
+    150.0
+}
+fn default_label_text_size() -> f32 {
+    1.0
+}
+fn default_label_text_color() -> [f32; 4] {
+    [1.0, 1.0, 1.0, 1.0]
+} // White
+fn default_label_category_color() -> [f32; 4] {
+    [0.8, 0.8, 0.2, 1.0]
+} // Yellow like default
 
-fn default_true() -> bool { true }
-fn default_timeline_width() -> f32 { 800.0 }
-fn default_view_range() -> f32 { 3600.0 }
-fn default_time_position() -> f32 { 0.5 }
-fn default_spacing_same_category() -> f32 { 0.0 }
-fn default_spacing_between_categories() -> f32 { 0.0 }
+fn default_true() -> bool {
+    true
+}
+fn default_timeline_width() -> f32 {
+    800.0
+}
+fn default_view_range() -> f32 {
+    3600.0
+}
+fn default_time_position() -> f32 {
+    0.5
+}
+fn default_spacing_same_category() -> f32 {
+    0.0
+}
+fn default_spacing_between_categories() -> f32 {
+    0.0
+}
 
 /// Time ruler marker spacing options (in minutes)
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -442,9 +514,11 @@ impl Default for UserConfig {
             label_column_category_color: [0.8, 0.8, 0.2, 1.0],
             close_on_escape: true,
             copy_with_event_name: false,
+            setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
             tracked_events: HashSet::new(),
+            favorite_events: HashSet::new(),
             oneshot_events: HashSet::new(),
             notification_config: NotificationConfig::default(),
         }
@@ -489,6 +563,7 @@ pub struct RuntimeConfig {
     pub label_column_category_color: [f32; 4],
     pub close_on_escape: bool,
     pub copy_with_event_name: bool,
+    pub setup_onboarding_seen: bool,
 
     // === Time Ruler Settings ===
     pub time_ruler_interval: TimeRulerInterval,
@@ -496,6 +571,7 @@ pub struct RuntimeConfig {
 
     // === Notification Settings ===
     pub tracked_events: HashSet<TrackedEventId>,
+    pub favorite_events: HashSet<TrackedEventId>,
     pub oneshot_events: HashSet<TrackedEventId>,
     pub notification_config: NotificationConfig,
 }
@@ -538,9 +614,11 @@ impl Default for RuntimeConfig {
             label_column_category_color: [0.8, 0.8, 0.2, 1.0],
             close_on_escape: true,
             copy_with_event_name: false,
+            setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
             tracked_events: HashSet::new(),
+            favorite_events: HashSet::new(),
             oneshot_events: HashSet::new(),
             notification_config: NotificationConfig::default(),
         }
@@ -549,7 +627,8 @@ impl Default for RuntimeConfig {
 
 // === Global State ===
 
-pub static RUNTIME_CONFIG: Lazy<Mutex<RuntimeConfig>> = Lazy::new(|| Mutex::new(RuntimeConfig::default()));
+pub static RUNTIME_CONFIG: Lazy<Mutex<RuntimeConfig>> =
+    Lazy::new(|| Mutex::new(RuntimeConfig::default()));
 pub static USER_CONFIG: Lazy<Mutex<UserConfig>> = Lazy::new(|| Mutex::new(UserConfig::default()));
 pub static SELECTED_TRACK: Lazy<Mutex<Option<usize>>> = Lazy::new(|| Mutex::new(None));
 pub static SELECTED_EVENT: Lazy<Mutex<Option<usize>>> = Lazy::new(|| Mutex::new(None));
@@ -559,11 +638,11 @@ pub static SELECTED_EVENT: Lazy<Mutex<Option<usize>>> = Lazy::new(|| Mutex::new(
 pub fn apply_user_overrides() {
     // Load fresh tracks from JSON (outside locks)
     let (default_tracks, categories) = load_tracks_from_json();
-    
+
     // Scope 1: Clean up user config
     let (cleaned_custom_tracks, user_settings) = {
         let mut user_cfg = USER_CONFIG.lock();
-        
+
         // Deduplicate custom tracks by name (keep first occurrence)
         let mut seen_custom_track_names: HashSet<String> = HashSet::new();
         user_cfg.custom_tracks.retain(|track| {
@@ -574,16 +653,15 @@ pub fn apply_user_overrides() {
                 true // Keep first occurrence
             }
         });
-        
+
         // Remove custom tracks that now exist in default JSON
-        let default_track_names: HashSet<String> = default_tracks.iter()
-            .map(|t| t.name.clone())
-            .collect();
-        
-        user_cfg.custom_tracks.retain(|track| {
-            !default_track_names.contains(&track.name)
-        });
-        
+        let default_track_names: HashSet<String> =
+            default_tracks.iter().map(|t| t.name.clone()).collect();
+
+        user_cfg
+            .custom_tracks
+            .retain(|track| !default_track_names.contains(&track.name));
+
         // Clone data we need (releases lock early)
         (
             user_cfg.custom_tracks.clone(),
@@ -624,20 +702,22 @@ pub fn apply_user_overrides() {
                 user_cfg.time_ruler_interval,
                 user_cfg.time_ruler_show_current_time,
                 user_cfg.tracked_events.clone(),
+                user_cfg.favorite_events.clone(),
                 user_cfg.oneshot_events.clone(),
                 user_cfg.notification_config.clone(),
-            )
+                user_cfg.setup_onboarding_seen,
+            ),
         )
     }; // user_cfg lock dropped here
-    
+
     // Scope 2: Update runtime config
     {
         let mut runtime = RUNTIME_CONFIG.lock();
-        
+
         // Set runtime tracks to defaults
         runtime.tracks = default_tracks;
         runtime.categories = categories;
-        
+
         // Apply user overrides to default tracks
         for track in &mut runtime.tracks {
             if let Some(override_data) = user_settings.0.get(&track.name) {
@@ -647,7 +727,7 @@ pub fn apply_user_overrides() {
                 if let Some(height) = override_data.height {
                     track.height = height;
                 }
-                
+
                 for event in &mut track.events {
                     if override_data.disabled_events.contains(&event.name) {
                         event.enabled = false;
@@ -655,10 +735,10 @@ pub fn apply_user_overrides() {
                 }
             }
         }
-        
+
         // Add cleaned custom tracks
         runtime.tracks.extend(cleaned_custom_tracks);
-        
+
         // Apply all user settings
         runtime.category_visibility = user_settings.1;
         runtime.show_main_window = user_settings.2;
@@ -695,54 +775,56 @@ pub fn apply_user_overrides() {
         runtime.time_ruler_interval = user_settings.33;
         runtime.time_ruler_show_current_time = user_settings.34;
         runtime.tracked_events = user_settings.35;
-        runtime.oneshot_events = user_settings.36;
-        runtime.notification_config = user_settings.37;
+        runtime.favorite_events = user_settings.36;
+        runtime.oneshot_events = user_settings.37;
+        runtime.notification_config = user_settings.38;
+        runtime.setup_onboarding_seen = user_settings.39;
     } // runtime lock dropped here
 }
 
 pub fn extract_user_overrides() {
     let runtime = RUNTIME_CONFIG.lock();
     let mut user_cfg = USER_CONFIG.lock();
-    
+
     user_cfg.track_overrides.clear();
     user_cfg.custom_tracks.clear();
-    
+
     let (default_tracks, _) = load_tracks_from_json();
-    let default_map: HashMap<String, &EventTrack> = default_tracks
-        .iter()
-        .map(|t| (t.name.clone(), t))
-        .collect();
-    
+    let default_map: HashMap<String, &EventTrack> =
+        default_tracks.iter().map(|t| (t.name.clone(), t)).collect();
+
     for track in &runtime.tracks {
         if let Some(default_track) = default_map.get(&track.name) {
             let mut override_data = TrackOverride::default();
             let mut has_changes = false;
-            
+
             if track.visible != default_track.visible {
                 override_data.visible = Some(track.visible);
                 has_changes = true;
             }
-            
+
             if (track.height - default_track.height).abs() > 0.1 {
                 override_data.height = Some(track.height);
                 has_changes = true;
             }
-            
+
             for event in &track.events {
                 if !event.enabled {
                     override_data.disabled_events.push(event.name.clone());
                     has_changes = true;
                 }
             }
-            
+
             if has_changes {
-                user_cfg.track_overrides.insert(track.name.clone(), override_data);
+                user_cfg
+                    .track_overrides
+                    .insert(track.name.clone(), override_data);
             }
         } else {
             user_cfg.custom_tracks.push(track.clone());
         }
     }
-    
+
     user_cfg.show_main_window = runtime.show_main_window;
     user_cfg.is_window_locked = runtime.is_window_locked;
     user_cfg.hide_background = runtime.hide_background;
@@ -774,10 +856,12 @@ pub fn extract_user_overrides() {
     user_cfg.label_column_category_color = runtime.label_column_category_color;
     user_cfg.close_on_escape = runtime.close_on_escape;
     user_cfg.copy_with_event_name = runtime.copy_with_event_name;
+    user_cfg.setup_onboarding_seen = runtime.setup_onboarding_seen;
     user_cfg.time_ruler_interval = runtime.time_ruler_interval;
     user_cfg.time_ruler_show_current_time = runtime.time_ruler_show_current_time;
     user_cfg.category_visibility = runtime.category_visibility.clone();
     user_cfg.tracked_events = runtime.tracked_events.clone();
+    user_cfg.favorite_events = runtime.favorite_events.clone();
     user_cfg.oneshot_events = runtime.oneshot_events.clone();
     user_cfg.notification_config = runtime.notification_config.clone();
 }
@@ -800,13 +884,13 @@ pub fn load_user_config() {
             }
         }
     }
-    
+
     apply_user_overrides();
 }
 
 pub fn save_user_config() {
     extract_user_overrides();
-    
+
     let user_cfg = USER_CONFIG.lock();
     if let Some(path) = get_user_config_path() {
         if let Some(dir) = path.parent() {

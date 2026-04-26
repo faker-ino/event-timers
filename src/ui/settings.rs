@@ -1,14 +1,19 @@
 use nexus::imgui::{
-    ColorEdit, ColorEditFlags, InputFloat, InputText, Selectable, TableFlags, TreeNodeFlags, Ui, Window,
+    ColorEdit, ColorEditFlags, InputFloat, InputText, Selectable, TableFlags, TreeNodeFlags, Ui,
+    Window,
 };
-use std::collections::HashSet;
 use parking_lot::MutexGuard;
+use std::collections::HashSet;
 
-use crate::config::{TimeRulerInterval, ToastPosition, TrackedEventId, RUNTIME_CONFIG, SELECTED_EVENT, SELECTED_TRACK, RuntimeConfig};
+use crate::config::{
+    RuntimeConfig, TimeRulerInterval, ToastPosition, TrackedEventId, RUNTIME_CONFIG,
+    SELECTED_EVENT, SELECTED_TRACK,
+};
 use crate::json_loader::{load_tracks_from_json, EventColor, EventTrack, TimelineEvent};
 use crate::notifications::NOTIFICATION_STATE;
 
-const GITHUB_EVENT_TRACKS_URL: &str = "https://raw.githubusercontent.com/qjv/event-timers/main/event_tracks.json";
+const GITHUB_EVENT_TRACKS_URL: &str =
+    "https://raw.githubusercontent.com/qjv/event-timers/main/event_tracks.json";
 
 pub fn check_for_event_tracks_update() {
     use std::thread;
@@ -24,7 +29,7 @@ pub fn check_for_event_tracks_update() {
                 nexus::log::log(
                     nexus::log::LogLevel::Critical,
                     "Event Timers",
-                    &format!("Failed to create Tokio runtime: {}", e)
+                    &format!("Failed to create Tokio runtime: {}", e),
                 );
                 return;
             }
@@ -134,7 +139,10 @@ pub fn render_settings(ui: &Ui) {
             }
             ui.new_line();
 
-            ui.checkbox("Show Current Time on Ruler", &mut config.time_ruler_show_current_time);
+            ui.checkbox(
+                "Show Current Time on Ruler",
+                &mut config.time_ruler_show_current_time,
+            );
         }
 
         let mut view_range_minutes = config.view_range_seconds / 60.0;
@@ -157,11 +165,23 @@ pub fn render_settings(ui: &Ui) {
 
         if config.show_category_headers {
             ui.same_line();
-            if ui.radio_button("Left##hdr", &mut config.category_header_alignment, crate::config::TextAlignment::Left) {}
+            if ui.radio_button(
+                "Left##hdr",
+                &mut config.category_header_alignment,
+                crate::config::TextAlignment::Left,
+            ) {}
             ui.same_line();
-            if ui.radio_button("Center##hdr", &mut config.category_header_alignment, crate::config::TextAlignment::Center) {}
+            if ui.radio_button(
+                "Center##hdr",
+                &mut config.category_header_alignment,
+                crate::config::TextAlignment::Center,
+            ) {}
             ui.same_line();
-            if ui.radio_button("Right##hdr", &mut config.category_header_alignment, crate::config::TextAlignment::Right) {}
+            if ui.radio_button(
+                "Right##hdr",
+                &mut config.category_header_alignment,
+                crate::config::TextAlignment::Right,
+            ) {}
 
             nexus::imgui::Slider::new("Header Padding", 0.0, 50.0)
                 .build(ui, &mut config.category_header_padding);
@@ -178,18 +198,36 @@ pub fn render_settings(ui: &Ui) {
         // --- Labels ---
         ui.text("Track Labels");
         ui.same_line();
-        if ui.radio_button("None##lbl", &mut config.label_column_position, crate::config::LabelColumnPosition::None) {}
+        if ui.radio_button(
+            "None##lbl",
+            &mut config.label_column_position,
+            crate::config::LabelColumnPosition::None,
+        ) {}
         ui.same_line();
-        if ui.radio_button("Left##lbl", &mut config.label_column_position, crate::config::LabelColumnPosition::Left) {}
+        if ui.radio_button(
+            "Left##lbl",
+            &mut config.label_column_position,
+            crate::config::LabelColumnPosition::Left,
+        ) {}
         ui.same_line();
-        if ui.radio_button("Right##lbl", &mut config.label_column_position, crate::config::LabelColumnPosition::Right) {}
+        if ui.radio_button(
+            "Right##lbl",
+            &mut config.label_column_position,
+            crate::config::LabelColumnPosition::Right,
+        ) {}
 
         if config.label_column_position != crate::config::LabelColumnPosition::None {
             nexus::imgui::Slider::new("Label Column Width", 50.0, 300.0)
                 .build(ui, &mut config.label_column_width);
 
-            ui.checkbox("Show Category in Label", &mut config.label_column_show_category);
-            ui.checkbox("Show Track Name in Label", &mut config.label_column_show_track);
+            ui.checkbox(
+                "Show Category in Label",
+                &mut config.label_column_show_category,
+            );
+            ui.checkbox(
+                "Show Track Name in Label",
+                &mut config.label_column_show_track,
+            );
 
             nexus::imgui::Slider::new("Label Text Size", 0.5, 2.0)
                 .build(ui, &mut config.label_column_text_size);
@@ -202,9 +240,12 @@ pub fn render_settings(ui: &Ui) {
                 .flags(ColorEditFlags::ALPHA_BAR)
                 .build(ui);
 
-            ColorEdit::new("Label Category Text", &mut config.label_column_category_color)
-                .flags(ColorEditFlags::ALPHA_BAR)
-                .build(ui);
+            ColorEdit::new(
+                "Label Category Text",
+                &mut config.label_column_category_color,
+            )
+            .flags(ColorEditFlags::ALPHA_BAR)
+            .build(ui);
         }
 
         ui.spacing();
@@ -219,7 +260,10 @@ pub fn render_settings(ui: &Ui) {
         nexus::imgui::Slider::new("Track Padding", 0.0, 20.0)
             .build(ui, &mut config.global_track_padding);
 
-        ui.checkbox("Override All Track Heights", &mut config.override_all_track_heights);
+        ui.checkbox(
+            "Override All Track Heights",
+            &mut config.override_all_track_heights,
+        );
         if config.override_all_track_heights {
             nexus::imgui::Slider::new("Global Track Height", 20.0, 200.0)
                 .build(ui, &mut config.global_track_height);
@@ -240,7 +284,10 @@ pub fn render_settings(ui: &Ui) {
         // --- Other ---
         ui.text("Other");
         ui.checkbox("Close window with ESC", &mut config.close_on_escape);
-        ui.checkbox("Include event name when copying waypoint", &mut config.copy_with_event_name);
+        ui.checkbox(
+            "Include event name when copying waypoint",
+            &mut config.copy_with_event_name,
+        );
 
         ui.unindent();
     }
@@ -251,7 +298,10 @@ pub fn render_settings(ui: &Ui) {
 
         // --- Toast Notifications ---
         ui.text("Toast Notifications");
-        ui.checkbox("Enable Toasts", &mut config.notification_config.toast_enabled);
+        ui.checkbox(
+            "Enable Toasts",
+            &mut config.notification_config.toast_enabled,
+        );
 
         if config.notification_config.toast_enabled {
             nexus::imgui::Slider::new("Toast Duration (sec)", 3.0, 15.0)
@@ -263,12 +313,28 @@ pub fn render_settings(ui: &Ui) {
             }
 
             ui.text("Toast Position:");
-            if ui.radio_button("Top Left##tp", &mut config.notification_config.toast_position, ToastPosition::TopLeft) {}
+            if ui.radio_button(
+                "Top Left##tp",
+                &mut config.notification_config.toast_position,
+                ToastPosition::TopLeft,
+            ) {}
             ui.same_line();
-            if ui.radio_button("Top Right##tp", &mut config.notification_config.toast_position, ToastPosition::TopRight) {}
-            if ui.radio_button("Bottom Left##tp", &mut config.notification_config.toast_position, ToastPosition::BottomLeft) {}
+            if ui.radio_button(
+                "Top Right##tp",
+                &mut config.notification_config.toast_position,
+                ToastPosition::TopRight,
+            ) {}
+            if ui.radio_button(
+                "Bottom Left##tp",
+                &mut config.notification_config.toast_position,
+                ToastPosition::BottomLeft,
+            ) {}
             ui.same_line();
-            if ui.radio_button("Bottom Right##tp", &mut config.notification_config.toast_position, ToastPosition::BottomRight) {}
+            if ui.radio_button(
+                "Bottom Right##tp",
+                &mut config.notification_config.toast_position,
+                ToastPosition::BottomRight,
+            ) {}
 
             let mut x_pct = config.notification_config.toast_offset_x * 100.0;
             if nexus::imgui::Slider::new("X Offset", 0.0, 50.0)
@@ -293,24 +359,39 @@ pub fn render_settings(ui: &Ui) {
             nexus::imgui::Slider::new("Toast Text Scale", 0.8, 2.0)
                 .build(ui, &mut config.notification_config.toast_text_scale);
 
-            ColorEdit::new("Toast Background", &mut config.notification_config.toast_bg_color)
-                .flags(ColorEditFlags::ALPHA_BAR)
-                .build(ui);
+            ColorEdit::new(
+                "Toast Background",
+                &mut config.notification_config.toast_bg_color,
+            )
+            .flags(ColorEditFlags::ALPHA_BAR)
+            .build(ui);
 
-            ColorEdit::new("Toast Event Name", &mut config.notification_config.toast_title_color)
-                .flags(ColorEditFlags::ALPHA_BAR)
-                .build(ui);
+            ColorEdit::new(
+                "Toast Event Name",
+                &mut config.notification_config.toast_title_color,
+            )
+            .flags(ColorEditFlags::ALPHA_BAR)
+            .build(ui);
 
-            ColorEdit::new("Toast Track Name", &mut config.notification_config.toast_track_color)
-                .flags(ColorEditFlags::ALPHA_BAR)
-                .build(ui);
+            ColorEdit::new(
+                "Toast Track Name",
+                &mut config.notification_config.toast_track_color,
+            )
+            .flags(ColorEditFlags::ALPHA_BAR)
+            .build(ui);
 
-            ColorEdit::new("Toast Time Text", &mut config.notification_config.toast_time_color)
-                .flags(ColorEditFlags::ALPHA_BAR)
-                .build(ui);
+            ColorEdit::new(
+                "Toast Time Text",
+                &mut config.notification_config.toast_time_color,
+            )
+            .flags(ColorEditFlags::ALPHA_BAR)
+            .build(ui);
 
             if ui.button("Preview Toast") {
-                let (name, color) = config.notification_config.reminders.first()
+                let (name, color) = config
+                    .notification_config
+                    .reminders
+                    .first()
                     .map(|r| (r.name.clone(), r.text_color))
                     .unwrap_or(("Preview".to_string(), [1.0, 1.0, 1.0, 1.0]));
                 NOTIFICATION_STATE.lock().show_preview(&name, color);
@@ -324,6 +405,13 @@ pub fn render_settings(ui: &Ui) {
         ui.text("Reminders");
         ui.text_disabled("Configure when notifications trigger");
 
+        let mut grace_minutes = config.notification_config.happening_now_grace_minutes as i32;
+        if nexus::imgui::Slider::new("\"Happening now\" Grace (min)", 0, 60)
+            .build(ui, &mut grace_minutes)
+        {
+            config.notification_config.happening_now_grace_minutes = grace_minutes.max(0) as u32;
+        }
+
         let mut reminder_to_remove: Option<usize> = None;
         let reminder_count = config.notification_config.reminders.len();
 
@@ -332,7 +420,10 @@ pub fn render_settings(ui: &Ui) {
             let _id = ui.push_id(&format!("rem_{}", i));
 
             let mut name = config.notification_config.reminders[i].name.clone();
-            if InputText::new(ui, "##name", &mut name).hint("Reminder name").build() {
+            if InputText::new(ui, "##name", &mut name)
+                .hint("Reminder name")
+                .build()
+            {
                 config.notification_config.reminders[i].name = name;
             }
 
@@ -343,15 +434,22 @@ pub fn render_settings(ui: &Ui) {
 
             if config.notification_config.reminders[i].minutes_before == 0 {
                 ui.text_disabled("0 = Repeats during event");
-                let mut interval = config.notification_config.reminders[i].ongoing_interval_minutes as i32;
-                if nexus::imgui::Slider::new("Repeat Interval (min)", 1, 10).build(ui, &mut interval) {
-                    config.notification_config.reminders[i].ongoing_interval_minutes = interval.max(1) as u32;
+                let mut interval =
+                    config.notification_config.reminders[i].ongoing_interval_minutes as i32;
+                if nexus::imgui::Slider::new("Repeat Interval (min)", 1, 10)
+                    .build(ui, &mut interval)
+                {
+                    config.notification_config.reminders[i].ongoing_interval_minutes =
+                        interval.max(1) as u32;
                 }
             }
 
-            ColorEdit::new("Reminder Color", &mut config.notification_config.reminders[i].text_color)
-                .flags(ColorEditFlags::ALPHA_BAR)
-                .build(ui);
+            ColorEdit::new(
+                "Reminder Color",
+                &mut config.notification_config.reminders[i].text_color,
+            )
+            .flags(ColorEditFlags::ALPHA_BAR)
+            .build(ui);
 
             if reminder_count > 1 && ui.small_button("Remove") {
                 reminder_to_remove = Some(i);
@@ -364,7 +462,10 @@ pub fn render_settings(ui: &Ui) {
 
         ui.separator();
         if ui.button("Add Reminder") {
-            config.notification_config.reminders.push(crate::config::ReminderConfig::default());
+            config
+                .notification_config
+                .reminders
+                .push(crate::config::ReminderConfig::default());
         }
 
         ui.spacing();
@@ -372,11 +473,15 @@ pub fn render_settings(ui: &Ui) {
 
         // --- Upcoming Events Panel ---
         ui.text("Upcoming Events Panel");
-        ui.checkbox("Enable Panel", &mut config.notification_config.upcoming_panel_enabled);
+        ui.checkbox(
+            "Enable Panel",
+            &mut config.notification_config.upcoming_panel_enabled,
+        );
 
         if config.notification_config.upcoming_panel_enabled {
             let mut max_upcoming = config.notification_config.max_upcoming_events as i32;
-            if nexus::imgui::Slider::new("Max Events in Panel", 5, 20).build(ui, &mut max_upcoming) {
+            if nexus::imgui::Slider::new("Max Events in Panel", 5, 20).build(ui, &mut max_upcoming)
+            {
                 config.notification_config.max_upcoming_events = max_upcoming as usize;
             }
         }
@@ -386,6 +491,9 @@ pub fn render_settings(ui: &Ui) {
 
         // --- Tracked Events ---
         ui.text("Tracked Events");
+        ui.text_disabled(
+            "Right-click an event in the timeline to track, track next only, or favorite it.",
+        );
 
         thread_local! {
             static SEARCH_TEXT: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
@@ -394,7 +502,9 @@ pub fn render_settings(ui: &Ui) {
         let mut search_text = SEARCH_TEXT.with(|s| s.borrow().clone());
         let search_width = ui.content_region_avail()[0] - 50.0;
         ui.set_next_item_width(search_width);
-        InputText::new(ui, "##search", &mut search_text).hint("Search events...").build();
+        InputText::new(ui, "##search", &mut search_text)
+            .hint("Search events...")
+            .build();
         SEARCH_TEXT.with(|s| *s.borrow_mut() = search_text.clone());
         ui.same_line();
         if ui.small_button("X##clr") {
@@ -407,9 +517,13 @@ pub fn render_settings(ui: &Ui) {
             let mut seen: HashSet<(String, String)> = HashSet::new();
 
             for track in &config.tracks {
-                if !track.visible { continue; }
+                if !track.visible {
+                    continue;
+                }
                 for event in &track.events {
-                    if !event.enabled { continue; }
+                    if !event.enabled {
+                        continue;
+                    }
                     if event.name.to_lowercase().contains(&search_lower)
                         || track.name.to_lowercase().contains(&search_lower)
                     {
@@ -431,7 +545,8 @@ pub fn render_settings(ui: &Ui) {
                 let mut to_track: Option<TrackedEventId> = None;
                 let mut to_oneshot: Option<TrackedEventId> = None;
 
-                let table_flags = TableFlags::SIZING_STRETCH_PROP | TableFlags::ROW_BG | TableFlags::PAD_OUTER_X;
+                let table_flags =
+                    TableFlags::SIZING_STRETCH_PROP | TableFlags::ROW_BG | TableFlags::PAD_OUTER_X;
                 if let Some(_t) = ui.begin_table_with_flags("##search_results", 4, table_flags) {
                     ui.table_setup_column("Event");
                     ui.table_setup_column_with(nexus::imgui::TableColumnSetup {
@@ -466,8 +581,14 @@ pub fn render_settings(ui: &Ui) {
 
                         // Action buttons
                         ui.table_next_column();
-                        let _btn_color = ui.push_style_color(nexus::imgui::StyleColor::Button, [0.2, 0.5, 0.2, 0.8]);
-                        let _btn_hover = ui.push_style_color(nexus::imgui::StyleColor::ButtonHovered, [0.3, 0.7, 0.3, 1.0]);
+                        let _btn_color = ui.push_style_color(
+                            nexus::imgui::StyleColor::Button,
+                            [0.2, 0.5, 0.2, 0.8],
+                        );
+                        let _btn_hover = ui.push_style_color(
+                            nexus::imgui::StyleColor::ButtonHovered,
+                            [0.3, 0.7, 0.3, 1.0],
+                        );
                         if ui.small_button(&format!("Track##{}{}", track_name, event_name)) {
                             to_track = Some(TrackedEventId::new(track_name, event_name));
                         }
@@ -476,8 +597,14 @@ pub fn render_settings(ui: &Ui) {
 
                         ui.same_line();
 
-                        let _btn_color2 = ui.push_style_color(nexus::imgui::StyleColor::Button, [0.6, 0.4, 0.1, 0.8]);
-                        let _btn_hover2 = ui.push_style_color(nexus::imgui::StyleColor::ButtonHovered, [0.8, 0.5, 0.2, 1.0]);
+                        let _btn_color2 = ui.push_style_color(
+                            nexus::imgui::StyleColor::Button,
+                            [0.6, 0.4, 0.1, 0.8],
+                        );
+                        let _btn_hover2 = ui.push_style_color(
+                            nexus::imgui::StyleColor::ButtonHovered,
+                            [0.8, 0.5, 0.2, 1.0],
+                        );
                         if ui.small_button(&format!("Next##{}{}", track_name, event_name)) {
                             to_oneshot = Some(TrackedEventId::new(track_name, event_name));
                         }
@@ -505,27 +632,40 @@ pub fn render_settings(ui: &Ui) {
 
         let tracked_count = config.tracked_events.len();
         let oneshot_count = config.oneshot_events.len();
+        let favorite_count = config.favorite_events.len();
 
         // Header with counts
         ui.text_colored([0.4, 0.8, 1.0, 1.0], &format!("{} Tracked", tracked_count));
         if oneshot_count > 0 {
             ui.same_line();
-            ui.text_colored([1.0, 0.8, 0.4, 1.0], &format!(" + {} One-shot", oneshot_count));
+            ui.text_colored(
+                [1.0, 0.8, 0.4, 1.0],
+                &format!(" + {} One-shot", oneshot_count),
+            );
+        }
+        if favorite_count > 0 {
+            ui.same_line();
+            ui.text_colored(
+                [1.0, 0.82, 0.18, 1.0],
+                &format!(" + {} Favorites", favorite_count),
+            );
         }
 
-        if tracked_count > 0 || oneshot_count > 0 {
+        if tracked_count > 0 || oneshot_count > 0 || favorite_count > 0 {
             ui.same_line();
             if ui.io().key_ctrl {
                 if ui.small_button("Clear All") {
                     config.tracked_events.clear();
                     config.oneshot_events.clear();
+                    config.favorite_events.clear();
                 }
             } else {
                 ui.text_disabled("[Ctrl to clear]");
             }
 
             // Build a lookup map for event colors
-            let mut event_colors: std::collections::HashMap<(String, String), [f32; 4]> = std::collections::HashMap::new();
+            let mut event_colors: std::collections::HashMap<(String, String), [f32; 4]> =
+                std::collections::HashMap::new();
             for track in &config.tracks {
                 for event in &track.events {
                     event_colors.insert(
@@ -536,12 +676,29 @@ pub fn render_settings(ui: &Ui) {
             }
 
             // Combine tracked and oneshot events for display
-            let tracked: Vec<(TrackedEventId, bool)> = config.tracked_events.iter()
-                .map(|id| (id.clone(), false))
-                .chain(config.oneshot_events.iter().map(|id| (id.clone(), true)))
+            let tracked: Vec<(TrackedEventId, bool, bool)> = config
+                .tracked_events
+                .iter()
+                .map(|id| (id.clone(), false, config.favorite_events.contains(id)))
+                .chain(
+                    config
+                        .oneshot_events
+                        .iter()
+                        .map(|id| (id.clone(), true, config.favorite_events.contains(id))),
+                )
+                .chain(
+                    config
+                        .favorite_events
+                        .iter()
+                        .filter(|id| {
+                            !config.tracked_events.contains(*id)
+                                && !config.oneshot_events.contains(*id)
+                        })
+                        .map(|id| (id.clone(), false, true)),
+                )
                 .collect();
 
-            let mut to_remove: Vec<(TrackedEventId, bool)> = Vec::new();
+            let mut to_remove: Vec<(TrackedEventId, bool, bool)> = Vec::new();
 
             ui.spacing();
 
@@ -567,7 +724,7 @@ pub fn render_settings(ui: &Ui) {
                     user_id: Default::default(),
                 });
 
-                for (event_id, is_oneshot) in &tracked {
+                for (event_id, is_oneshot, is_favorite) in &tracked {
                     ui.table_next_row();
 
                     // Color indicator column
@@ -579,17 +736,22 @@ pub fn render_settings(ui: &Ui) {
 
                     let cursor_pos = ui.cursor_screen_pos();
                     let draw_list = ui.get_window_draw_list();
-                    draw_list.add_rect(
-                        cursor_pos,
-                        [cursor_pos[0] + 6.0, cursor_pos[1] + 18.0],
-                        color,
-                    ).filled(true).build();
+                    draw_list
+                        .add_rect(
+                            cursor_pos,
+                            [cursor_pos[0] + 6.0, cursor_pos[1] + 18.0],
+                            color,
+                        )
+                        .filled(true)
+                        .build();
                     ui.dummy([6.0, 18.0]);
 
                     // Event name column
                     ui.table_next_column();
                     ui.set_window_font_scale(1.1);
-                    if *is_oneshot {
+                    if *is_favorite {
+                        ui.text_colored([1.0, 0.82, 0.18, 1.0], &event_id.event_name);
+                    } else if *is_oneshot {
                         ui.text_colored([1.0, 0.8, 0.4, 1.0], &event_id.event_name);
                     } else {
                         ui.text_colored([1.0, 1.0, 1.0, 1.0], &event_id.event_name);
@@ -603,27 +765,42 @@ pub fn render_settings(ui: &Ui) {
                         ui.same_line();
                         ui.text_colored([1.0, 0.6, 0.2, 0.8], "(next only)");
                     }
+                    if *is_favorite {
+                        ui.same_line();
+                        ui.text_colored([1.0, 0.82, 0.18, 0.9], "(favorite)");
+                    }
 
                     // Remove button column
                     ui.table_next_column();
-                    let _btn_color = ui.push_style_color(nexus::imgui::StyleColor::Button, [0.6, 0.2, 0.2, 0.8]);
-                    let _btn_hover = ui.push_style_color(nexus::imgui::StyleColor::ButtonHovered, [0.8, 0.3, 0.3, 1.0]);
-                    if ui.small_button(&format!("X##{}{}{}", event_id.track_name, event_id.event_name, is_oneshot)) {
-                        to_remove.push((event_id.clone(), *is_oneshot));
+                    let _btn_color =
+                        ui.push_style_color(nexus::imgui::StyleColor::Button, [0.6, 0.2, 0.2, 0.8]);
+                    let _btn_hover = ui.push_style_color(
+                        nexus::imgui::StyleColor::ButtonHovered,
+                        [0.8, 0.3, 0.3, 1.0],
+                    );
+                    if ui.small_button(&format!(
+                        "X##{}{}{}{}",
+                        event_id.track_name, event_id.event_name, is_oneshot, is_favorite
+                    )) {
+                        to_remove.push((event_id.clone(), *is_oneshot, *is_favorite));
                     }
                 }
             }
 
-            for (id, is_oneshot) in to_remove {
+            for (id, is_oneshot, is_favorite) in to_remove {
                 if is_oneshot {
                     config.oneshot_events.remove(&id);
+                } else if is_favorite && !config.tracked_events.contains(&id) {
+                    config.favorite_events.remove(&id);
                 } else {
                     config.tracked_events.remove(&id);
                 }
             }
         } else {
             ui.spacing();
-            ui.text_disabled("No events tracked. Right-click events in the timeline to track them.");
+            ui.text_disabled(
+                "No events tracked. Right-click events in the timeline to track them.",
+            );
         }
 
         ui.unindent();
@@ -677,13 +854,18 @@ pub fn render_settings(ui: &Ui) {
                     config.category_order.push(cat.clone());
                 }
             }
-            config.category_order.retain(|cat| all_categories.contains(cat));
+            config
+                .category_order
+                .retain(|cat| all_categories.contains(cat));
         }
 
         let ordered_categories = config.category_order.clone();
 
         for category_name in &ordered_categories {
-            config.category_visibility.entry(category_name.clone()).or_insert(true);
+            config
+                .category_visibility
+                .entry(category_name.clone())
+                .or_insert(true);
         }
 
         let mut category_to_move_up = None;
@@ -700,21 +882,31 @@ pub fn render_settings(ui: &Ui) {
                 if cat_pos > 0 && ui.small_button(&format!("^##cat_{}", category)) {
                     category_to_move_up = Some(cat_pos);
                 }
-                if cat_pos > 0 { ui.same_line(); }
-                if cat_pos < ordered_categories.len() - 1 && ui.small_button(&format!("v##cat_{}", category)) {
+                if cat_pos > 0 {
+                    ui.same_line();
+                }
+                if cat_pos < ordered_categories.len() - 1
+                    && ui.small_button(&format!("v##cat_{}", category))
+                {
                     category_to_move_down = Some(cat_pos);
                 }
-                if cat_pos < ordered_categories.len() - 1 { ui.same_line(); }
+                if cat_pos < ordered_categories.len() - 1 {
+                    ui.same_line();
+                }
             }
 
             if ui.collapsing_header(category, TreeNodeFlags::empty()) {
-                let track_indices: Vec<usize> = config.tracks.iter().enumerate()
+                let track_indices: Vec<usize> = config
+                    .tracks
+                    .iter()
+                    .enumerate()
                     .filter(|(_, t)| t.category == *category)
                     .map(|(i, _)| i)
                     .collect();
 
                 let (default_tracks, _) = load_tracks_from_json();
-                let default_names: HashSet<&str> = default_tracks.iter().map(|t| t.name.as_str()).collect();
+                let default_names: HashSet<&str> =
+                    default_tracks.iter().map(|t| t.name.as_str()).collect();
 
                 let mut track_to_delete = None;
 
@@ -735,18 +927,28 @@ pub fn render_settings(ui: &Ui) {
                         if list_pos > 0 && ui.small_button(&format!("^##t_{}", track_name)) {
                             config.tracks.swap(index, track_indices[list_pos - 1]);
                         }
-                        if list_pos > 0 { ui.same_line(); }
-                        if list_pos < track_indices.len() - 1 && ui.small_button(&format!("v##t_{}", track_name)) {
+                        if list_pos > 0 {
+                            ui.same_line();
+                        }
+                        if list_pos < track_indices.len() - 1
+                            && ui.small_button(&format!("v##t_{}", track_name))
+                        {
                             config.tracks.swap(index, track_indices[list_pos + 1]);
                         }
-                        if list_pos < track_indices.len() - 1 { ui.same_line(); }
+                        if list_pos < track_indices.len() - 1 {
+                            ui.same_line();
+                        }
                     }
 
                     if is_default {
                         if ui.collapsing_header(&track_name, TreeNodeFlags::empty()) {
                             let mut tracked_events_clone = config.tracked_events.clone();
                             let track = &mut config.tracks[index];
-                            render_default_track_editor_inline(ui, track, &mut tracked_events_clone);
+                            render_default_track_editor_inline(
+                                ui,
+                                track,
+                                &mut tracked_events_clone,
+                            );
                             config.tracked_events = tracked_events_clone;
                         }
                     } else {
@@ -772,7 +974,9 @@ pub fn render_settings(ui: &Ui) {
                         *sel = None;
                         *SELECTED_EVENT.lock() = None;
                     } else if let Some(s) = *sel {
-                        if s > del_idx { *sel = Some(s - 1); }
+                        if s > del_idx {
+                            *sel = Some(s - 1);
+                        }
                     }
                 }
             }
@@ -788,8 +992,13 @@ pub fn render_settings(ui: &Ui) {
 
         if ui.button("Add Custom Track") {
             let (default_tracks, _) = load_tracks_from_json();
-            let default_names: HashSet<&str> = default_tracks.iter().map(|t| t.name.as_str()).collect();
-            let custom_count = config.tracks.iter().filter(|t| !default_names.contains(t.name.as_str())).count();
+            let default_names: HashSet<&str> =
+                default_tracks.iter().map(|t| t.name.as_str()).collect();
+            let custom_count = config
+                .tracks
+                .iter()
+                .filter(|t| !default_names.contains(t.name.as_str()))
+                .count();
             let mut track = EventTrack::default();
             track.name = format!("Custom Track {}", custom_count + 1);
             track.category = "Custom".to_string();
@@ -854,7 +1063,11 @@ fn render_custom_track_editor(ui: &Ui, config: &mut MutexGuard<RuntimeConfig>) {
     }
 }
 
-fn render_default_track_editor_inline(ui: &Ui, track: &mut EventTrack, tracked_events: &mut HashSet<TrackedEventId>) {
+fn render_default_track_editor_inline(
+    ui: &Ui,
+    track: &mut EventTrack,
+    tracked_events: &mut HashSet<TrackedEventId>,
+) {
     if InputFloat::new(ui, "Track Height", &mut track.height).build() {
         track.height = track.height.max(20.0).min(200.0);
     }
@@ -862,12 +1075,20 @@ fn render_default_track_editor_inline(ui: &Ui, track: &mut EventTrack, tracked_e
     ui.separator();
     ui.text("Events");
 
-    let mut changes: Vec<(String, Option<bool>, Option<[f32; 4]>, Option<i64>, Option<i64>)> = Vec::new();
+    let mut changes: Vec<(
+        String,
+        Option<bool>,
+        Option<[f32; 4]>,
+        Option<i64>,
+        Option<i64>,
+    )> = Vec::new();
     let mut tracking_changes: Vec<(String, bool)> = Vec::new();
     let mut seen_names = HashSet::new();
 
     for event in track.events.iter() {
-        if seen_names.contains(&event.name) { continue; }
+        if seen_names.contains(&event.name) {
+            continue;
+        }
         seen_names.insert(event.name.clone());
 
         let label = if event.enabled {
@@ -880,7 +1101,8 @@ fn render_default_track_editor_inline(ui: &Ui, track: &mut EventTrack, tracked_e
             ui.indent();
 
             let mut current_enabled = event.enabled;
-            let enabled_changed = ui.checkbox(&format!("Enabled##{}", event.name), &mut current_enabled);
+            let enabled_changed =
+                ui.checkbox(&format!("Enabled##{}", event.name), &mut current_enabled);
 
             let event_id = TrackedEventId::new(&track.name, &event.name);
             let mut tracked = tracked_events.contains(&event_id);
@@ -894,30 +1116,63 @@ fn render_default_track_editor_inline(ui: &Ui, track: &mut EventTrack, tracked_e
                 .build(ui);
 
             let mut start_min = (event.start_offset / 60) as i32;
-            let offset_changed = nexus::imgui::InputInt::new(ui, &format!("Start (min)##{}", event.name), &mut start_min).build();
+            let offset_changed = nexus::imgui::InputInt::new(
+                ui,
+                &format!("Start (min)##{}", event.name),
+                &mut start_min,
+            )
+            .build();
 
             let mut duration_min = (event.duration / 60) as i32;
-            let duration_changed = nexus::imgui::InputInt::new(ui, &format!("Duration (min)##{}", event.name), &mut duration_min).build();
+            let duration_changed = nexus::imgui::InputInt::new(
+                ui,
+                &format!("Duration (min)##{}", event.name),
+                &mut duration_min,
+            )
+            .build();
 
             ui.text_disabled(&format!("Cycle: {}m", event.cycle_duration / 60));
 
             let reset_clicked = ui.button(&format!("Reset##{}", event.name));
 
-            if enabled_changed || color_changed || offset_changed || duration_changed || reset_clicked {
+            if enabled_changed
+                || color_changed
+                || offset_changed
+                || duration_changed
+                || reset_clicked
+            {
                 if reset_clicked {
                     let (default_tracks, _) = load_tracks_from_json();
                     if let Some(dt) = default_tracks.iter().find(|t| t.name == track.name) {
                         if let Some(de) = dt.events.iter().find(|e| e.name == event.name) {
-                            changes.push((event.name.clone(), Some(de.enabled), Some(de.color.to_array()), Some(de.start_offset), Some(de.duration)));
+                            changes.push((
+                                event.name.clone(),
+                                Some(de.enabled),
+                                Some(de.color.to_array()),
+                                Some(de.start_offset),
+                                Some(de.duration),
+                            ));
                         }
                     }
                 } else {
                     changes.push((
                         event.name.clone(),
-                        if enabled_changed { Some(current_enabled) } else { None },
+                        if enabled_changed {
+                            Some(current_enabled)
+                        } else {
+                            None
+                        },
                         if color_changed { Some(color) } else { None },
-                        if offset_changed { Some((start_min as i64) * 60) } else { None },
-                        if duration_changed { Some((duration_min.max(1) as i64) * 60) } else { None },
+                        if offset_changed {
+                            Some((start_min as i64) * 60)
+                        } else {
+                            None
+                        },
+                        if duration_changed {
+                            Some((duration_min.max(1) as i64) * 60)
+                        } else {
+                            None
+                        },
                     ));
                 }
             }
@@ -929,22 +1184,38 @@ fn render_default_track_editor_inline(ui: &Ui, track: &mut EventTrack, tracked_e
     for (name, enabled, color, offset, duration) in changes {
         for e in track.events.iter_mut() {
             if e.name == name {
-                if let Some(en) = enabled { e.enabled = en; }
-                if let Some(c) = color { e.color = EventColor::from_array(c); }
-                if let Some(o) = offset { e.start_offset = o; }
-                if let Some(d) = duration { e.duration = d; }
+                if let Some(en) = enabled {
+                    e.enabled = en;
+                }
+                if let Some(c) = color {
+                    e.color = EventColor::from_array(c);
+                }
+                if let Some(o) = offset {
+                    e.start_offset = o;
+                }
+                if let Some(d) = duration {
+                    e.duration = d;
+                }
             }
         }
     }
 
     for (name, should_track) in tracking_changes {
         let event_id = TrackedEventId::new(&track.name, &name);
-        if should_track { tracked_events.insert(event_id); }
-        else { tracked_events.remove(&event_id); }
+        if should_track {
+            tracked_events.insert(event_id);
+        } else {
+            tracked_events.remove(&event_id);
+        }
     }
 }
 
-fn render_track_editor_modal(ui: &Ui, config: &mut MutexGuard<RuntimeConfig>, track_index: usize, selected_event: &mut MutexGuard<Option<usize>>) {
+fn render_track_editor_modal(
+    ui: &Ui,
+    config: &mut MutexGuard<RuntimeConfig>,
+    track_index: usize,
+    selected_event: &mut MutexGuard<Option<usize>>,
+) {
     let track = &mut config.tracks[track_index];
 
     let mut name = track.name.clone();
@@ -969,7 +1240,9 @@ fn render_track_editor_modal(ui: &Ui, config: &mut MutexGuard<RuntimeConfig>, tr
     }
     ui.separator();
 
-    if let Some(_t) = ui.begin_table_with_flags("Events", 4, TableFlags::BORDERS | TableFlags::ROW_BG) {
+    if let Some(_t) =
+        ui.begin_table_with_flags("Events", 4, TableFlags::BORDERS | TableFlags::ROW_BG)
+    {
         ui.table_setup_column("Name");
         ui.table_setup_column("Start");
         ui.table_setup_column("Duration");
@@ -1043,7 +1316,10 @@ fn render_event_editor(ui: &Ui, event: &mut TimelineEvent) {
     }
 
     let mut color = event.color.to_array();
-    if ColorEdit::new("Color", &mut color).flags(ColorEditFlags::ALPHA_BAR).build(ui) {
+    if ColorEdit::new("Color", &mut color)
+        .flags(ColorEditFlags::ALPHA_BAR)
+        .build(ui)
+    {
         event.color = EventColor::from_array(color);
     }
 

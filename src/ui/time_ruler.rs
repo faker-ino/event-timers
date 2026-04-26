@@ -1,6 +1,6 @@
-use nexus::imgui::Ui;
 use crate::config::TimeRulerInterval;
 use crate::time_utils::{calculate_tyria_time, format_time_only};
+use nexus::imgui::Ui;
 
 /// Render the time ruler
 /// - `label_offset`: horizontal offset for the timeline portion (when labels are on the left)
@@ -25,13 +25,17 @@ pub fn render_time_ruler(
     let timeline_width = available_width - label_offset;
 
     // Draw background for entire ruler (including label area)
-    draw_list.add_rect(
-        cursor_pos,
-        [cursor_pos[0] + available_width, cursor_pos[1] + ruler_height],
-        [0.15, 0.15, 0.15, 1.0],
-    )
-    .filled(true)
-    .build();
+    draw_list
+        .add_rect(
+            cursor_pos,
+            [
+                cursor_pos[0] + available_width,
+                cursor_pos[1] + ruler_height,
+            ],
+            [0.15, 0.15, 0.15, 1.0],
+        )
+        .filled(true)
+        .build();
 
     // Tick at configured interval
     let tick_interval_seconds = tick_interval.as_seconds();
@@ -43,34 +47,56 @@ pub fn render_time_ruler(
     let first_tick = ((start_time / tick_interval_seconds) + 1) * tick_interval_seconds;
 
     // Calculate max iterations needed
-    let max_ticks = ((time_before_current + time_after_current) / tick_interval_seconds as f32).ceil() as i64 + 1;
+    let max_ticks = ((time_before_current + time_after_current) / tick_interval_seconds as f32)
+        .ceil() as i64
+        + 1;
+    let tick_spacing = tick_interval_seconds as f32 * pixels_per_second;
+    let show_tick_labels = tick_spacing >= 44.0;
 
     for i in 0..max_ticks {
         let tick_time = first_tick + (i * tick_interval_seconds);
         let offset_from_current = tick_time - current_time;
 
-        if offset_from_current >= -time_before_current as i64 && offset_from_current <= time_after_current as i64 {
-            let x_pos = timeline_start_x + ((offset_from_current as f32 + time_before_current) * pixels_per_second);
+        if offset_from_current >= -time_before_current as i64
+            && offset_from_current <= time_after_current as i64
+        {
+            let x_pos = timeline_start_x
+                + ((offset_from_current as f32 + time_before_current) * pixels_per_second);
 
-            draw_list.add_line(
-                [x_pos, cursor_pos[1] + ruler_height - 8.0],
-                [x_pos, cursor_pos[1] + ruler_height],
-                [0.6, 0.6, 0.6, 1.0],
-            )
-            .thickness(1.0)
-            .build();
+            draw_list
+                .add_line(
+                    [x_pos, cursor_pos[1] + ruler_height - 8.0],
+                    [x_pos, cursor_pos[1] + ruler_height],
+                    [0.6, 0.6, 0.6, 1.0],
+                )
+                .thickness(1.0)
+                .build();
+
+            if show_tick_labels {
+                let label = format_time_only(tick_time);
+                let text_size = ui.calc_text_size(&label);
+                let text_x = (x_pos - text_size[0] / 2.0)
+                    .max(timeline_start_x)
+                    .min(timeline_start_x + timeline_width - text_size[0]);
+                draw_list.add_text(
+                    [text_x, cursor_pos[1] + 2.0],
+                    [0.78, 0.78, 0.78, 0.95],
+                    &label,
+                );
+            }
         }
     }
 
     // Current time red line - positioned within timeline area
     let current_time_x = timeline_start_x + (time_position * timeline_width);
-    draw_list.add_line(
-        [current_time_x, cursor_pos[1]],
-        [current_time_x, cursor_pos[1] + ruler_height],
-        [1.0, 0.0, 0.0, 1.0],
-    )
-    .thickness(2.0)
-    .build();
+    draw_list
+        .add_line(
+            [current_time_x, cursor_pos[1]],
+            [current_time_x, cursor_pos[1] + ruler_height],
+            [1.0, 0.0, 0.0, 1.0],
+        )
+        .thickness(2.0)
+        .build();
 
     // Display current time text on the ruler if enabled
     if show_current_time {

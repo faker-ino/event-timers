@@ -66,15 +66,24 @@ pub fn update_notifications() {
             }
 
             // Calculate next/current occurrence of this event
-            if let Some((start_time, seconds_until, seconds_into_event, event_duration, cycle_number)) =
-                calculate_event_timing(track, event, current_time)
+            if let Some((
+                start_time,
+                seconds_until,
+                seconds_into_event,
+                event_duration,
+                _cycle_number,
+            )) = calculate_event_timing(track, event, current_time)
             {
                 // Add to upcoming events list
                 upcoming.push(UpcomingEvent {
                     event_id: event_id.clone(),
                     start_time,
                     seconds_until,
-                    seconds_into: if seconds_into_event >= 0 { seconds_into_event } else { 0 },
+                    seconds_into: if seconds_into_event >= 0 {
+                        seconds_into_event
+                    } else {
+                        0
+                    },
                     color: event.color.to_array(),
                     copy_text: event.copy_text.clone(),
                 });
@@ -91,17 +100,27 @@ pub fn update_notifications() {
 
                         if reminder.minutes_before == 0 {
                             // "During event" reminder - triggers at configurable intervals while event is active
-                            // but not on the very last interval
+                            // but only within the grace window after the event starts, and not on the very last interval
                             if seconds_into_event >= 0 {
-                                let interval_seconds = (reminder.ongoing_interval_minutes.max(1) as i64) * 60;
+                                let interval_seconds =
+                                    (reminder.ongoing_interval_minutes.max(1) as i64) * 60;
+                                let grace_seconds =
+                                    (notification_config.happening_now_grace_minutes as i64) * 60;
                                 let remaining_seconds = event_duration - seconds_into_event;
                                 // Don't notify on the last interval
-                                if remaining_seconds > interval_seconds {
+                                if seconds_into_event <= grace_seconds
+                                    && remaining_seconds > interval_seconds
+                                {
                                     // Use start_time for deduplication (handles events spanning cycle boundaries)
                                     // Check: global cooldown, per-event cooldown, and ongoing interval
                                     if state.can_add_toast(current_time)
                                         && state.can_notify_event(&event_id, current_time)
-                                        && state.should_show_ongoing(&event_id, start_time, current_time, interval_seconds)
+                                        && state.should_show_ongoing(
+                                            &event_id,
+                                            start_time,
+                                            current_time,
+                                            interval_seconds,
+                                        )
                                     {
                                         // Use negative value to indicate "time ago" (time since event started)
                                         let minutes_ago = -((seconds_into_event / 60) as i32);
@@ -114,7 +133,11 @@ pub fn update_notifications() {
                                             reminder.text_color,
                                             current_time,
                                         );
-                                        state.mark_ongoing_notified(&event_id, start_time, current_time);
+                                        state.mark_ongoing_notified(
+                                            &event_id,
+                                            start_time,
+                                            current_time,
+                                        );
                                         state.mark_event_notified(&event_id, current_time);
                                     }
                                 }
@@ -127,7 +150,11 @@ pub fn update_notifications() {
                                 && seconds_until <= reminder_seconds
                                 && state.can_add_toast(current_time)
                                 && state.can_notify_event(&event_id, current_time)
-                                && !state.was_notified(&event_id, start_time, reminder.minutes_before)
+                                && !state.was_notified(
+                                    &event_id,
+                                    start_time,
+                                    reminder.minutes_before,
+                                )
                             {
                                 let minutes_until = ((seconds_until + 59) / 60) as i32;
                                 state.add_toast(
@@ -207,7 +234,13 @@ fn calculate_event_timing(
     let start_time = current_time + time_to_start;
 
     // Event not active yet, so seconds_into is negative (indicates not active)
-    Some((start_time, time_to_start, -1, event.duration, next_cycle_number))
+    Some((
+        start_time,
+        time_to_start,
+        -1,
+        event.duration,
+        next_cycle_number,
+    ))
 }
 
 /// Helper to check if an event is currently tracked
@@ -226,6 +259,18 @@ pub fn toggle_event_tracking(track_name: &str, event_name: &str) {
         config.tracked_events.remove(&event_id);
     } else {
         config.tracked_events.insert(event_id);
+    }
+}
+
+/// Toggle favorite highlight for an event
+pub fn toggle_event_favorite(track_name: &str, event_name: &str) {
+    let mut config = RUNTIME_CONFIG.lock();
+    let event_id = TrackedEventId::new(track_name, event_name);
+
+    if config.favorite_events.contains(&event_id) {
+        config.favorite_events.remove(&event_id);
+    } else {
+        config.favorite_events.insert(event_id);
     }
 }
 

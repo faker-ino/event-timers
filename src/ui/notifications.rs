@@ -162,6 +162,16 @@ pub fn render_toast_notifications(ui: &Ui) {
         (config.notification_config.clone(), config.copy_with_event_name)
     };
 
+    if !notification_config.toast_enabled {
+        let has_preview_or_toasts = {
+            let state = NOTIFICATION_STATE.lock();
+            state.preview_toast.is_some() || !state.toast_queue.is_empty()
+        };
+        if !has_preview_or_toasts {
+            return;
+        }
+    }
+
     let toast_position = notification_config.toast_position;
     let toast_size = notification_config.toast_size;
     let toast_duration = notification_config.toast_duration_seconds;
@@ -171,6 +181,10 @@ pub fn render_toast_notifications(ui: &Ui) {
     // Update and render preview toast
     {
         let mut state = NOTIFICATION_STATE.lock();
+        state.update_toasts(
+            notification_config.toast_duration_seconds,
+            notification_config.max_visible_toasts,
+        );
         state.update_preview(toast_duration);
 
         if let Some(preview) = &state.preview_toast {

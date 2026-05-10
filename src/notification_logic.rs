@@ -3,19 +3,14 @@ use crate::json_loader::{EventTrack, TimelineEvent};
 use crate::notifications::{UpcomingEvent, NOTIFICATION_STATE};
 use crate::time_utils::get_current_unix_time;
 
-/// Main update function - call once per frame from render loop
+/// Background update function - called by maintenance ticker.
 pub fn update_notifications() {
     let current_time = get_current_unix_time();
-
-    let (tracked_events, oneshot_events, notification_config, tracks) = {
-        let config = RUNTIME_CONFIG.lock();
-        (
-            config.tracked_events.clone(),
-            config.oneshot_events.clone(),
-            config.notification_config.clone(),
-            config.tracks.clone(),
-        )
-    };
+    let mut config = RUNTIME_CONFIG.lock();
+    let tracked_events = &config.tracked_events;
+    let oneshot_events = &config.oneshot_events;
+    let notification_config = &config.notification_config;
+    let tracks = &config.tracks;
 
     // Early exit if no tracked events
     if tracked_events.is_empty() && oneshot_events.is_empty() {
@@ -29,12 +24,6 @@ pub fn update_notifications() {
 
     let mut state = NOTIFICATION_STATE.lock();
 
-    // Update toast fade/removal
-    state.update_toasts(
-        notification_config.toast_duration_seconds,
-        notification_config.max_visible_toasts,
-    );
-
     // Only refresh calculations once per second
     if !state.needs_refresh(current_time) {
         return;
@@ -46,7 +35,7 @@ pub fn update_notifications() {
 
     let mut upcoming: Vec<UpcomingEvent> = Vec::new();
 
-    for track in &tracks {
+    for track in tracks {
         if !track.visible {
             continue;
         }
@@ -88,13 +77,9 @@ pub fn update_notifications() {
                     copy_text: event.copy_text.clone(),
                 });
 
-                // For oneshot events, remove after the event starts
-                if is_oneshot && seconds_into_event >= 0 {
-                    oneshot_to_remove.push(event_id.clone());
-                }
-
                 // Check each configured reminder
                 if notification_config.toast_enabled {
+                    let mut oneshot_fired = false;
                     for reminder in &notification_config.reminders {
                         let reminder_seconds = (reminder.minutes_before as i64) * 60;
 
@@ -139,6 +124,11 @@ pub fn update_notifications() {
                                             current_time,
                                         );
                                         state.mark_event_notified(&event_id, current_time);
+                                        if is_oneshot {
+                                            oneshot_to_remove.push(event_id.clone());
+                                            oneshot_fired = true;
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -168,9 +158,21 @@ pub fn update_notifications() {
                                 );
                                 state.mark_notified(&event_id, start_time, reminder.minutes_before);
                                 state.mark_event_notified(&event_id, current_time);
+                                if is_oneshot {
+                                    oneshot_to_remove.push(event_id.clone());
+                                    oneshot_fired = true;
+                                    break;
+                                }
                             }
                         }
                     }
+                    // If a one-shot event has already started and still didn't trigger,
+                    // drop it so "next only" doesn't keep hanging around forever.
+                    if is_oneshot && !oneshot_fired && seconds_into_event >= 0 {
+                        oneshot_to_remove.push(event_id.clone());
+                    }
+                } else if is_oneshot && seconds_into_event >= 0 {
+                    oneshot_to_remove.push(event_id.clone());
                 }
             }
         }
@@ -189,7 +191,6 @@ pub fn update_notifications() {
 
     // Remove fired oneshot events
     if !oneshot_to_remove.is_empty() {
-        let mut config = RUNTIME_CONFIG.lock();
         for event_id in oneshot_to_remove {
             config.oneshot_events.remove(&event_id);
         }

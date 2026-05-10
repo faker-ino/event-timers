@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 
 use crate::config::TrackedEventId;
-use std::collections::HashSet as StdHashSet;
+use std::collections::{HashMap as StdHashMap, HashSet as StdHashSet};
 
 // Thread-local storage for right-clicked event info
 // Stores (track_name, event_name, is_currently_tracked, is_oneshot_tracked, is_favorite)
@@ -20,10 +20,10 @@ thread_local! {
     static PENDING_TRACK_TOGGLE: RefCell<Option<(String, String, bool)>> = const { RefCell::new(None) }; // (track, event, is_oneshot)
     static PENDING_FAVORITE_TOGGLE: RefCell<Option<(String, String)>> = const { RefCell::new(None) };
     static PENDING_WIKI_OPEN: RefCell<Option<String>> = const { RefCell::new(None) };
-    // Cached tracked events for the current frame (to avoid re-locking)
-    static CACHED_TRACKED_EVENTS: RefCell<StdHashSet<TrackedEventId>> = RefCell::new(StdHashSet::new());
-    static CACHED_ONESHOT_EVENTS: RefCell<StdHashSet<TrackedEventId>> = RefCell::new(StdHashSet::new());
-    static CACHED_FAVORITE_EVENTS: RefCell<StdHashSet<TrackedEventId>> = RefCell::new(StdHashSet::new());
+    // Cached membership by track -> event names (avoids per-event TrackedEventId allocations in render loop)
+    static CACHED_TRACKED_BY_TRACK: RefCell<StdHashMap<String, StdHashSet<String>>> = RefCell::new(StdHashMap::new());
+    static CACHED_ONESHOT_BY_TRACK: RefCell<StdHashMap<String, StdHashSet<String>>> = RefCell::new(StdHashMap::new());
+    static CACHED_FAVORITE_BY_TRACK: RefCell<StdHashMap<String, StdHashSet<String>>> = RefCell::new(StdHashMap::new());
     // Cached copy setting for the current frame
     static CACHED_COPY_WITH_EVENT_NAME: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     // Track ESC key state for debouncing
@@ -72,15 +72,15 @@ pub fn render_main_window(ui: &Ui) {
         return;
     }
 
-    // Cache tracked events for this frame (to avoid re-locking in tooltip handler)
-    CACHED_TRACKED_EVENTS.with(|c| {
-        *c.borrow_mut() = config.tracked_events.clone();
+    // Cache tracked/favorite state for this frame in a lookup map.
+    CACHED_TRACKED_BY_TRACK.with(|c| {
+        *c.borrow_mut() = to_track_event_map(&config.tracked_events);
     });
-    CACHED_ONESHOT_EVENTS.with(|c| {
-        *c.borrow_mut() = config.oneshot_events.clone();
+    CACHED_ONESHOT_BY_TRACK.with(|c| {
+        *c.borrow_mut() = to_track_event_map(&config.oneshot_events);
     });
-    CACHED_FAVORITE_EVENTS.with(|c| {
-        *c.borrow_mut() = config.favorite_events.clone();
+    CACHED_FAVORITE_BY_TRACK.with(|c| {
+        *c.borrow_mut() = to_track_event_map(&config.favorite_events);
     });
 
     // Cache copy setting for this frame
@@ -354,6 +354,16 @@ pub fn render_main_window(ui: &Ui) {
                 }
             }
         });
+}
+
+fn to_track_event_map(source: &StdHashSet<TrackedEventId>) -> StdHashMap<String, StdHashSet<String>> {
+    let mut map: StdHashMap<String, StdHashSet<String>> = StdHashMap::new();
+    for id in source {
+        map.entry(id.track_name.clone())
+            .or_default()
+            .insert(id.event_name.clone());
+    }
+    map
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -981,10 +991,21 @@ fn render_timeline_track(
             continue;
         }
 
-        let event_id = TrackedEventId::new(&track.name, &event.name);
-        let is_tracked = CACHED_TRACKED_EVENTS.with(|c| c.borrow().contains(&event_id));
-        let is_oneshot = CACHED_ONESHOT_EVENTS.with(|c| c.borrow().contains(&event_id));
-        let is_favorite = CACHED_FAVORITE_EVENTS.with(|c| c.borrow().contains(&event_id));
+        let is_tracked = CACHED_TRACKED_BY_TRACK.with(|c| {
+            c.borrow()
+                .get(&track.name)
+                .is_some_and(|set| set.contains(event.name.as_str()))
+        });
+        let is_oneshot = CACHED_ONESHOT_BY_TRACK.with(|c| {
+            c.borrow()
+                .get(&track.name)
+                .is_some_and(|set| set.contains(event.name.as_str()))
+        });
+        let is_favorite = CACHED_FAVORITE_BY_TRACK.with(|c| {
+            c.borrow()
+                .get(&track.name)
+                .is_some_and(|set| set.contains(event.name.as_str()))
+        });
 
         let time_in_cycle = elapsed_since_base.rem_euclid(event.cycle_duration);
         let event_start_in_cycle = event.start_offset;
@@ -1237,11 +1258,21 @@ fn handle_track_tooltip(
                 // Right-click to track/untrack event
                 if ui.is_mouse_clicked(MouseButton::Right) {
                     // Check tracked status from cached value (avoids deadlock)
-                    let event_id = TrackedEventId::new(&track.name, &event.name);
-                    let is_tracked = CACHED_TRACKED_EVENTS.with(|c| c.borrow().contains(&event_id));
-                    let is_oneshot = CACHED_ONESHOT_EVENTS.with(|c| c.borrow().contains(&event_id));
-                    let is_favorite =
-                        CACHED_FAVORITE_EVENTS.with(|c| c.borrow().contains(&event_id));
+                    let is_tracked = CACHED_TRACKED_BY_TRACK.with(|c| {
+                        c.borrow()
+                            .get(&track.name)
+                            .is_some_and(|set| set.contains(event.name.as_str()))
+                    });
+                    let is_oneshot = CACHED_ONESHOT_BY_TRACK.with(|c| {
+                        c.borrow()
+                            .get(&track.name)
+                            .is_some_and(|set| set.contains(event.name.as_str()))
+                    });
+                    let is_favorite = CACHED_FAVORITE_BY_TRACK.with(|c| {
+                        c.borrow()
+                            .get(&track.name)
+                            .is_some_and(|set| set.contains(event.name.as_str()))
+                    });
                     CONTEXT_EVENT.with(|e| {
                         *e.borrow_mut() = Some((
                             track.name.clone(),

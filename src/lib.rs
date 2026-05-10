@@ -7,7 +7,12 @@ use nexus::{
     texture::load_texture_from_memory,
     AddonFlags, UpdateProvider,
 };
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use std::ffi::c_char;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
 
 mod config;
 mod json_loader;
@@ -26,6 +31,11 @@ use ui::{
 // Embed icon files directly in the binary
 const QA_ICON: &[u8] = include_bytes!("../qa_icon.png");
 const QA_ICON_HOVER: &[u8] = include_bytes!("../qa_icon_hovered.png");
+const NOTIFICATION_TICK_ACTIVE_MS: u64 = 250;
+const NOTIFICATION_TICK_IDLE_MS: u64 = 1500;
+
+static BG_STOP: AtomicBool = AtomicBool::new(false);
+static BG_THREAD: Lazy<Mutex<Option<thread::JoinHandle<()>>>> = Lazy::new(|| Mutex::new(None));
 
 extern "C-unwind" fn toggle_window_keybind(_identifier: *const c_char, is_release: bool) {
     if !is_release {
@@ -60,6 +70,7 @@ nexus::export! {
 
 fn load() {
     load_user_config();
+    BG_STOP.store(false, Ordering::Relaxed);
     
     // Check for event_tracks.json updates on load
     check_for_event_tracks_update();
@@ -77,10 +88,20 @@ fn load() {
         .revert_on_unload();
     
     register_render(RenderType::Render, render!(|ui| {
-        update_notifications();
         render_main_window(ui);
-        render_toast_notifications(ui);
-        render_upcoming_panel(ui);
+        let (toast_enabled, upcoming_enabled) = {
+            let config = RUNTIME_CONFIG.lock();
+            (
+                config.notification_config.toast_enabled,
+                config.notification_config.upcoming_panel_enabled,
+            )
+        };
+        if toast_enabled {
+            render_toast_notifications(ui);
+        }
+        if upcoming_enabled {
+            render_upcoming_panel(ui);
+        }
     }))
     .revert_on_unload();
     
@@ -88,6 +109,34 @@ fn load() {
         render_settings(ui);
     }))
     .revert_on_unload();
+
+    let handle = thread::Builder::new()
+        .name("event-timers-notifications".to_string())
+        .spawn(|| {
+            while !BG_STOP.load(Ordering::Relaxed) {
+                let (has_targets, any_surface_enabled) = {
+                    let config = RUNTIME_CONFIG.lock();
+                    let has_targets =
+                        !config.tracked_events.is_empty() || !config.oneshot_events.is_empty();
+                    let any_surface_enabled = config.notification_config.toast_enabled
+                        || config.notification_config.upcoming_panel_enabled
+                        || config.show_main_window;
+                    (has_targets, any_surface_enabled)
+                };
+                if has_targets && any_surface_enabled {
+                    update_notifications();
+                }
+                let sleep_ms = if has_targets && any_surface_enabled {
+                    NOTIFICATION_TICK_ACTIVE_MS
+                } else {
+                    NOTIFICATION_TICK_IDLE_MS
+                };
+                thread::sleep(Duration::from_millis(sleep_ms));
+            }
+        });
+    if let Ok(h) = handle {
+        *BG_THREAD.lock() = Some(h);
+    }
 }
 
 fn setup_quick_access() {
@@ -107,5 +156,9 @@ fn setup_quick_access() {
 }
 
 fn unload() {
+    BG_STOP.store(true, Ordering::Relaxed);
+    if let Some(h) = BG_THREAD.lock().take() {
+        let _ = h.join();
+    }
     save_user_config();
 }

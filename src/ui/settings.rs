@@ -6,7 +6,8 @@ use parking_lot::MutexGuard;
 use std::collections::HashSet;
 
 use crate::config::{
-    RuntimeConfig, TimeRulerInterval, ToastPosition, TrackedEventId, RUNTIME_CONFIG,
+    load_user_config, RuntimeConfig, TimeRulerInterval, ToastPosition, TrackedEventId,
+    RUNTIME_CONFIG,
     SELECTED_EVENT, SELECTED_TRACK,
 };
 use crate::json_loader::{load_tracks_from_json, EventColor, EventTrack, TimelineEvent};
@@ -67,10 +68,12 @@ pub fn check_for_event_tracks_update() {
 
                                     match std::fs::write(&path, github_content) {
                                         Ok(_) => {
+                                            // Apply updated tracks immediately in runtime state.
+                                            load_user_config();
                                             nexus::log::log(
                                                 nexus::log::LogLevel::Info,
                                                 "Event Timers",
-                                                "event_tracks.json updated! Reload addon (Ctrl+Shift+L) to apply."
+                                                "event_tracks.json updated and applied."
                                             );
                                         }
                                         Err(e) => {
@@ -288,6 +291,7 @@ pub fn render_settings(ui: &Ui) {
             "Include event name when copying waypoint",
             &mut config.copy_with_event_name,
         );
+        ui.checkbox("Show quick access icon", &mut config.show_quick_access_icon);
 
         ui.unindent();
     }

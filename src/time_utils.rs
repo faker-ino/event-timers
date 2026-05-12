@@ -33,14 +33,26 @@ pub fn calculate_tyria_time(utc_timestamp: i64) -> (i32, i32) {
 }
 
 pub fn format_time_only(timestamp: i64) -> String {
-    use chrono::{DateTime, Local};
-
-    let Some(datetime) = DateTime::from_timestamp(timestamp, 0) else {
+    if timestamp < libc::time_t::MIN as i64 || timestamp > libc::time_t::MAX as i64 {
         return "--:--".to_string();
-    };
+    }
 
-    datetime
-        .with_timezone(&Local)
-        .format("%H:%M")
-        .to_string()
+    let ts: libc::time_t = timestamp as libc::time_t;
+    let mut out = std::mem::MaybeUninit::<libc::tm>::uninit();
+
+    #[cfg(unix)]
+    let ok = unsafe { !libc::localtime_r(&ts, out.as_mut_ptr()).is_null() };
+
+    #[cfg(windows)]
+    let ok = unsafe { libc::localtime_s(out.as_mut_ptr(), &ts) == 0 };
+
+    if !ok {
+        return "--:--".to_string();
+    }
+
+    let tm = unsafe { out.assume_init() };
+    let hour = tm.tm_hour;
+    let minute = tm.tm_min;
+
+    format!("{:02}:{:02}", hour, minute)
 }

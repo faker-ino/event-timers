@@ -365,6 +365,8 @@ pub struct UserConfig {
     pub close_on_escape: bool,
     #[serde(default)]
     pub copy_with_event_name: bool,
+    #[serde(default = "default_true")]
+    pub show_quick_access_icon: bool,
     #[serde(default)]
     pub setup_onboarding_seen: bool,
 
@@ -514,6 +516,7 @@ impl Default for UserConfig {
             label_column_category_color: [0.8, 0.8, 0.2, 1.0],
             close_on_escape: true,
             copy_with_event_name: false,
+            show_quick_access_icon: true,
             setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
@@ -563,6 +566,7 @@ pub struct RuntimeConfig {
     pub label_column_category_color: [f32; 4],
     pub close_on_escape: bool,
     pub copy_with_event_name: bool,
+    pub show_quick_access_icon: bool,
     pub setup_onboarding_seen: bool,
 
     // === Time Ruler Settings ===
@@ -614,6 +618,7 @@ impl Default for RuntimeConfig {
             label_column_category_color: [0.8, 0.8, 0.2, 1.0],
             close_on_escape: true,
             copy_with_event_name: false,
+            show_quick_access_icon: true,
             setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
@@ -699,6 +704,7 @@ pub fn apply_user_overrides() {
                 user_cfg.label_column_category_color,
                 user_cfg.close_on_escape,
                 user_cfg.copy_with_event_name,
+                user_cfg.show_quick_access_icon,
                 user_cfg.time_ruler_interval,
                 user_cfg.time_ruler_show_current_time,
                 user_cfg.tracked_events.clone(),
@@ -772,13 +778,14 @@ pub fn apply_user_overrides() {
         runtime.label_column_category_color = user_settings.30;
         runtime.close_on_escape = user_settings.31;
         runtime.copy_with_event_name = user_settings.32;
-        runtime.time_ruler_interval = user_settings.33;
-        runtime.time_ruler_show_current_time = user_settings.34;
-        runtime.tracked_events = user_settings.35;
-        runtime.favorite_events = user_settings.36;
-        runtime.oneshot_events = user_settings.37;
-        runtime.notification_config = user_settings.38;
-        runtime.setup_onboarding_seen = user_settings.39;
+        runtime.show_quick_access_icon = user_settings.33;
+        runtime.time_ruler_interval = user_settings.34;
+        runtime.time_ruler_show_current_time = user_settings.35;
+        runtime.tracked_events = user_settings.36;
+        runtime.favorite_events = user_settings.37;
+        runtime.oneshot_events = user_settings.38;
+        runtime.notification_config = user_settings.39;
+        runtime.setup_onboarding_seen = user_settings.40;
     } // runtime lock dropped here
 }
 
@@ -856,6 +863,7 @@ pub fn extract_user_overrides() {
     user_cfg.label_column_category_color = runtime.label_column_category_color;
     user_cfg.close_on_escape = runtime.close_on_escape;
     user_cfg.copy_with_event_name = runtime.copy_with_event_name;
+    user_cfg.show_quick_access_icon = runtime.show_quick_access_icon;
     user_cfg.setup_onboarding_seen = runtime.setup_onboarding_seen;
     user_cfg.time_ruler_interval = runtime.time_ruler_interval;
     user_cfg.time_ruler_show_current_time = runtime.time_ruler_show_current_time;

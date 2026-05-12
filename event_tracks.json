@@ -1725,7 +1725,7 @@
           "events": []
         },
         {
-          "name": "Starlit Weald: Garden of the Ancients",
+          "name": "Garden of the Ancients",
           "timeline_type": "real_time",
           "base_time_calculator": "local_day_start",
           "visible": true,

@@ -9,7 +9,9 @@ use std::{
     path::PathBuf,
 };
 
+use crate::finished_events::{export_finished, import_finished, FinishedOccurrence};
 use crate::json_loader::{load_tracks_from_json, EventTrack};
+use crate::time_utils::get_current_unix_time;
 
 // === Notification Types ===
 
@@ -390,6 +392,11 @@ pub struct UserConfig {
 
     #[serde(default)]
     pub notification_config: NotificationConfig,
+
+    /// Events manually marked "finished" for the current GW2 reset day.
+    /// Stale entries (prior reset days) are dropped on load/save.
+    #[serde(default)]
+    pub finished_events: HashSet<FinishedOccurrence>,
 }
 
 fn default_global_track_bg() -> [f32; 4] {
@@ -527,6 +534,7 @@ impl Default for UserConfig {
             favorite_events: HashSet::new(),
             oneshot_events: HashSet::new(),
             notification_config: NotificationConfig::default(),
+            finished_events: HashSet::new(),
         }
     }
 }
@@ -880,6 +888,7 @@ pub fn extract_user_overrides() {
     user_cfg.favorite_events = runtime.favorite_events.clone();
     user_cfg.oneshot_events = runtime.oneshot_events.clone();
     user_cfg.notification_config = runtime.notification_config.clone();
+    user_cfg.finished_events = export_finished(get_current_unix_time());
 }
 
 // === File I/O ===
@@ -893,6 +902,7 @@ pub fn load_user_config() {
         if path.exists() {
             if let Ok(json_str) = fs::read_to_string(&path) {
                 if let Ok(loaded) = serde_json::from_str::<UserConfig>(&json_str) {
+                    import_finished(loaded.finished_events.clone(), get_current_unix_time());
                     *USER_CONFIG.lock() = loaded;
                     apply_user_overrides();
                     return;

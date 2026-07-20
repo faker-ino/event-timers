@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use std::ffi::c_char;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod config;
 mod finished_events;
@@ -35,6 +35,7 @@ const QA_ICON: &[u8] = include_bytes!("../qa_icon.png");
 const QA_ICON_HOVER: &[u8] = include_bytes!("../qa_icon_hovered.png");
 const NOTIFICATION_TICK_ACTIVE_MS: u64 = 250;
 const NOTIFICATION_TICK_IDLE_MS: u64 = 1500;
+const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(30);
 const QUICK_ACCESS_ID: &str = "EVENT_TIMERS_QA";
 
 static BG_STOP: AtomicBool = AtomicBool::new(false);
@@ -120,6 +121,7 @@ fn load() {
     let handle = thread::Builder::new()
         .name("event-timers-notifications".to_string())
         .spawn(|| {
+            let mut last_autosave = Instant::now();
             while !BG_STOP.load(Ordering::Relaxed) {
                 let (has_targets, any_surface_enabled) = {
                     let config = RUNTIME_CONFIG.lock();
@@ -132,6 +134,12 @@ fn load() {
                 };
                 if has_targets && any_surface_enabled {
                     update_notifications();
+                }
+                // Periodically persist settings so a crash or force-close (which
+                // skips the normal unload/save path) doesn't lose recent changes.
+                if last_autosave.elapsed() >= AUTOSAVE_INTERVAL {
+                    save_user_config();
+                    last_autosave = Instant::now();
                 }
                 let sleep_ms = if has_targets && any_surface_enabled {
                     NOTIFICATION_TICK_ACTIVE_MS

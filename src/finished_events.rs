@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 use crate::config::TrackedEventId;
@@ -11,15 +12,15 @@ fn reset_day(unix_time: i64) -> i64 {
 }
 
 /// Identifies one occurrence of a recurring event, by which GW2 reset-day it falls on.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct FinishedOccurrence {
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FinishedOccurrence {
     event_id: TrackedEventId,
     day: i64,
 }
 
 /// Tracks which events the user has manually marked as finished for the current
-/// GW2 daily reset period. Session-only: intentionally not persisted, since entries
-/// are only meaningful until the next reset.
+/// GW2 daily reset period. Persisted to disk (see `export_finished`/`import_finished`),
+/// but entries from a prior reset day are meaningless and get cleaned up on load/save.
 #[derive(Debug, Default)]
 pub struct FinishedEventsState {
     finished: HashSet<FinishedOccurrence>,
@@ -59,4 +60,20 @@ pub fn toggle_event_finished(
     if !state.finished.remove(&key) {
         state.finished.insert(key);
     }
+}
+
+/// Snapshot of currently-finished occurrences for persisting to disk, with
+/// anything from a prior reset day dropped first.
+pub fn export_finished(current_time: i64) -> HashSet<FinishedOccurrence> {
+    let mut state = FINISHED_EVENTS.lock();
+    state.cleanup_old(current_time);
+    state.finished.clone()
+}
+
+/// Restores finished-event markers loaded from disk, dropping any that
+/// already belong to a reset day before `current_time`.
+pub fn import_finished(entries: HashSet<FinishedOccurrence>, current_time: i64) {
+    let mut state = FINISHED_EVENTS.lock();
+    state.finished = entries;
+    state.cleanup_old(current_time);
 }

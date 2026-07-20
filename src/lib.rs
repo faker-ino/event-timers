@@ -3,9 +3,9 @@
 use nexus::{
     gui::{register_render, render, RenderType},
     keybind::register_keybind_with_string,
-    quick_access::add_quick_access,
+    quick_access::{add_quick_access, remove_quick_access},
     texture::load_texture_from_memory,
-    AddonFlags, UpdateProvider,
+    AddonFlags,
 };
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -15,6 +15,8 @@ use std::thread;
 use std::time::Duration;
 
 mod config;
+mod finished_events;
+mod game_state;
 mod json_loader;
 mod notification_logic;
 mod notifications;
@@ -33,9 +35,13 @@ const QA_ICON: &[u8] = include_bytes!("../qa_icon.png");
 const QA_ICON_HOVER: &[u8] = include_bytes!("../qa_icon_hovered.png");
 const NOTIFICATION_TICK_ACTIVE_MS: u64 = 250;
 const NOTIFICATION_TICK_IDLE_MS: u64 = 1500;
+const QUICK_ACCESS_ID: &str = "EVENT_TIMERS_QA";
 
 static BG_STOP: AtomicBool = AtomicBool::new(false);
 static BG_THREAD: Lazy<Mutex<Option<thread::JoinHandle<()>>>> = Lazy::new(|| Mutex::new(None));
+// Tracks whether the quick access shortcut is currently registered with Nexus,
+// so its visibility can be toggled live from settings / competitive-mode state.
+static QUICK_ACCESS_ADDED: AtomicBool = AtomicBool::new(false);
 
 extern "C-unwind" fn toggle_window_keybind(_identifier: *const c_char, is_release: bool) {
     if !is_release {
@@ -64,8 +70,6 @@ nexus::export! {
     load,
     unload,
     flags: AddonFlags::None,
-    provider: UpdateProvider::GitHub,
-    update_link: "https://github.com/qjv/event-timers",
 }
 
 fn load() {
@@ -75,14 +79,10 @@ fn load() {
     // Check for event_tracks.json updates on load
     check_for_event_tracks_update();
     
-    // Setup Quick Access icon
-    let show_quick_access_icon = {
-        let config = RUNTIME_CONFIG.lock();
-        config.show_quick_access_icon
-    };
-    if show_quick_access_icon {
-        setup_quick_access();
-    }
+    // Load quick access textures once; the shortcut itself is added/removed
+    // reactively every frame by sync_quick_access_visibility().
+    load_texture_from_memory("EVENT_TIMERS_QA_ICON", QA_ICON, None);
+    load_texture_from_memory("EVENT_TIMERS_QA_ICON_HOVER", QA_ICON_HOVER, None);
 
     register_keybind_with_string("Toggle Event Timers", toggle_window_keybind, "ALT+E")
         .revert_on_unload();
@@ -92,8 +92,9 @@ fn load() {
 
     register_keybind_with_string("Toggle Upcoming Panel", toggle_upcoming_panel_keybind, "")
         .revert_on_unload();
-    
+
     register_render(RenderType::Render, render!(|ui| {
+        sync_quick_access_visibility();
         render_main_window(ui);
         let (toast_enabled, upcoming_enabled) = {
             let config = RUNTIME_CONFIG.lock();
@@ -145,26 +146,38 @@ fn load() {
     }
 }
 
-fn setup_quick_access() {
-    // Load textures from embedded bytes
-    load_texture_from_memory("EVENT_TIMERS_QA_ICON", QA_ICON, None);
-    load_texture_from_memory("EVENT_TIMERS_QA_ICON_HOVER", QA_ICON_HOVER, None);
-    
-    // Add quick access button
-    add_quick_access(
-        "EVENT_TIMERS_QA",
-        "EVENT_TIMERS_QA_ICON",
-        "EVENT_TIMERS_QA_ICON_HOVER",
-        "Toggle Event Timers",
-        "Toggle Event Timers Window"
-    )
-    .revert_on_unload();
+/// Adds or removes the quick access shortcut to match current settings.
+/// Called every frame so toggling "Show quick access icon" takes effect live.
+fn sync_quick_access_visibility() {
+    let desired = RUNTIME_CONFIG.lock().show_quick_access_icon;
+    let currently_added = QUICK_ACCESS_ADDED.load(Ordering::Relaxed);
+
+    if desired == currently_added {
+        return;
+    }
+
+    if desired {
+        add_quick_access(
+            QUICK_ACCESS_ID,
+            "EVENT_TIMERS_QA_ICON",
+            "EVENT_TIMERS_QA_ICON_HOVER",
+            "Toggle Event Timers",
+            "Toggle Event Timers Window",
+        )
+        .leak();
+    } else {
+        remove_quick_access(QUICK_ACCESS_ID);
+    }
+    QUICK_ACCESS_ADDED.store(desired, Ordering::Relaxed);
 }
 
 fn unload() {
     BG_STOP.store(true, Ordering::Relaxed);
     if let Some(h) = BG_THREAD.lock().take() {
         let _ = h.join();
+    }
+    if QUICK_ACCESS_ADDED.swap(false, Ordering::Relaxed) {
+        remove_quick_access(QUICK_ACCESS_ID);
     }
     save_user_config();
 }

@@ -368,6 +368,8 @@ pub struct UserConfig {
     #[serde(default = "default_true")]
     pub show_quick_access_icon: bool,
     #[serde(default)]
+    pub hide_viewer_in_competitive: bool,
+    #[serde(default)]
     pub setup_onboarding_seen: bool,
 
     // === Time Ruler Settings ===
@@ -517,6 +519,7 @@ impl Default for UserConfig {
             close_on_escape: true,
             copy_with_event_name: false,
             show_quick_access_icon: true,
+            hide_viewer_in_competitive: false,
             setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
@@ -567,6 +570,7 @@ pub struct RuntimeConfig {
     pub close_on_escape: bool,
     pub copy_with_event_name: bool,
     pub show_quick_access_icon: bool,
+    pub hide_viewer_in_competitive: bool,
     pub setup_onboarding_seen: bool,
 
     // === Time Ruler Settings ===
@@ -619,6 +623,7 @@ impl Default for RuntimeConfig {
             close_on_escape: true,
             copy_with_event_name: false,
             show_quick_access_icon: true,
+            hide_viewer_in_competitive: false,
             setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
@@ -705,6 +710,7 @@ pub fn apply_user_overrides() {
                 user_cfg.close_on_escape,
                 user_cfg.copy_with_event_name,
                 user_cfg.show_quick_access_icon,
+                user_cfg.hide_viewer_in_competitive,
                 user_cfg.time_ruler_interval,
                 user_cfg.time_ruler_show_current_time,
                 user_cfg.tracked_events.clone(),
@@ -779,13 +785,14 @@ pub fn apply_user_overrides() {
         runtime.close_on_escape = user_settings.31;
         runtime.copy_with_event_name = user_settings.32;
         runtime.show_quick_access_icon = user_settings.33;
-        runtime.time_ruler_interval = user_settings.34;
-        runtime.time_ruler_show_current_time = user_settings.35;
-        runtime.tracked_events = user_settings.36;
-        runtime.favorite_events = user_settings.37;
-        runtime.oneshot_events = user_settings.38;
-        runtime.notification_config = user_settings.39;
-        runtime.setup_onboarding_seen = user_settings.40;
+        runtime.hide_viewer_in_competitive = user_settings.34;
+        runtime.time_ruler_interval = user_settings.35;
+        runtime.time_ruler_show_current_time = user_settings.36;
+        runtime.tracked_events = user_settings.37;
+        runtime.favorite_events = user_settings.38;
+        runtime.oneshot_events = user_settings.39;
+        runtime.notification_config = user_settings.40;
+        runtime.setup_onboarding_seen = user_settings.41;
     } // runtime lock dropped here
 }
 
@@ -864,6 +871,7 @@ pub fn extract_user_overrides() {
     user_cfg.close_on_escape = runtime.close_on_escape;
     user_cfg.copy_with_event_name = runtime.copy_with_event_name;
     user_cfg.show_quick_access_icon = runtime.show_quick_access_icon;
+    user_cfg.hide_viewer_in_competitive = runtime.hide_viewer_in_competitive;
     user_cfg.setup_onboarding_seen = runtime.setup_onboarding_seen;
     user_cfg.time_ruler_interval = runtime.time_ruler_interval;
     user_cfg.time_ruler_show_current_time = runtime.time_ruler_show_current_time;

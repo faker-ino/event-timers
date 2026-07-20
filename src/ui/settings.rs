@@ -292,6 +292,10 @@ pub fn render_settings(ui: &Ui) {
             &mut config.copy_with_event_name,
         );
         ui.checkbox("Show quick access icon", &mut config.show_quick_access_icon);
+        ui.checkbox(
+            "Hide event viewer in competitive modes (PvP/WvW)",
+            &mut config.hide_viewer_in_competitive,
+        );
 
         ui.unindent();
     }

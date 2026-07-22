@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 mod config;
 mod finished_events;
 mod game_state;
+mod gw2_api;
 mod json_loader;
 mod notification_logic;
 mod notifications;
@@ -36,6 +37,7 @@ const QA_ICON_HOVER: &[u8] = include_bytes!("../qa_icon_hovered.png");
 const NOTIFICATION_TICK_ACTIVE_MS: u64 = 250;
 const NOTIFICATION_TICK_IDLE_MS: u64 = 1500;
 const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(30);
+const GW2_API_SYNC_INTERVAL: Duration = Duration::from_secs(300);
 const QUICK_ACCESS_ID: &str = "EVENT_TIMERS_QA";
 
 static BG_STOP: AtomicBool = AtomicBool::new(false);
@@ -79,6 +81,12 @@ fn load() {
     
     // Check for event_tracks.json updates on load
     check_for_event_tracks_update();
+
+    // Sync already-completed world bosses / map chests from the GW2 API on load.
+    let api_key = RUNTIME_CONFIG.lock().gw2_api_key.clone();
+    if !api_key.trim().is_empty() {
+        gw2_api::sync_now(api_key);
+    }
     
     // Load quick access textures once; the shortcut itself is added/removed
     // reactively every frame by sync_quick_access_visibility().
@@ -141,6 +149,9 @@ fn load() {
                     save_user_config();
                     last_autosave = Instant::now();
                 }
+
+                let api_key = RUNTIME_CONFIG.lock().gw2_api_key.clone();
+                gw2_api::maybe_auto_sync(&api_key, GW2_API_SYNC_INTERVAL);
                 let sleep_ms = if has_targets && any_surface_enabled {
                     NOTIFICATION_TICK_ACTIVE_MS
                 } else {

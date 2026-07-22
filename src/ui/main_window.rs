@@ -1,6 +1,6 @@
 use crate::config::{get_track_visual_config, LabelColumnPosition, TextAlignment, RUNTIME_CONFIG};
 use crate::finished_events::{is_event_finished, toggle_event_finished};
-use crate::game_state::is_in_competitive_mode;
+use crate::game_state::{is_in_competitive_mode, is_in_hidden_map, is_in_loading_or_login_screen};
 use crate::json_loader::EventTrack;
 use crate::notification_logic::{
     toggle_event_favorite, toggle_event_tracking, toggle_oneshot_tracking,
@@ -80,7 +80,11 @@ pub fn render_main_window(ui: &Ui) {
         return;
     }
 
-    if config.hide_viewer_in_competitive && is_in_competitive_mode() {
+    if config.hide_viewer_in_competitive && (is_in_competitive_mode() || is_in_hidden_map()) {
+        return;
+    }
+
+    if config.hide_viewer_on_loading_screens && is_in_loading_or_login_screen() {
         return;
     }
 

@@ -371,6 +371,8 @@ pub struct UserConfig {
     pub show_quick_access_icon: bool,
     #[serde(default)]
     pub hide_viewer_in_competitive: bool,
+    #[serde(default = "default_true")]
+    pub hide_viewer_on_loading_screens: bool,
     #[serde(default)]
     pub setup_onboarding_seen: bool,
 
@@ -397,6 +399,11 @@ pub struct UserConfig {
     /// Stale entries (prior reset days) are dropped on load/save.
     #[serde(default)]
     pub finished_events: HashSet<FinishedOccurrence>,
+
+    /// GW2 API key (needs only the "progression" permission) used to
+    /// automatically mark completed world bosses / map chests as finished.
+    #[serde(default)]
+    pub gw2_api_key: String,
 }
 
 fn default_global_track_bg() -> [f32; 4] {
@@ -527,6 +534,7 @@ impl Default for UserConfig {
             copy_with_event_name: false,
             show_quick_access_icon: true,
             hide_viewer_in_competitive: false,
+            hide_viewer_on_loading_screens: true,
             setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
@@ -535,6 +543,7 @@ impl Default for UserConfig {
             oneshot_events: HashSet::new(),
             notification_config: NotificationConfig::default(),
             finished_events: HashSet::new(),
+            gw2_api_key: String::new(),
         }
     }
 }
@@ -579,6 +588,7 @@ pub struct RuntimeConfig {
     pub copy_with_event_name: bool,
     pub show_quick_access_icon: bool,
     pub hide_viewer_in_competitive: bool,
+    pub hide_viewer_on_loading_screens: bool,
     pub setup_onboarding_seen: bool,
 
     // === Time Ruler Settings ===
@@ -590,6 +600,7 @@ pub struct RuntimeConfig {
     pub favorite_events: HashSet<TrackedEventId>,
     pub oneshot_events: HashSet<TrackedEventId>,
     pub notification_config: NotificationConfig,
+    pub gw2_api_key: String,
 }
 
 impl Default for RuntimeConfig {
@@ -632,6 +643,7 @@ impl Default for RuntimeConfig {
             copy_with_event_name: false,
             show_quick_access_icon: true,
             hide_viewer_in_competitive: false,
+            hide_viewer_on_loading_screens: true,
             setup_onboarding_seen: false,
             time_ruler_interval: TimeRulerInterval::default(),
             time_ruler_show_current_time: false,
@@ -639,6 +651,7 @@ impl Default for RuntimeConfig {
             favorite_events: HashSet::new(),
             oneshot_events: HashSet::new(),
             notification_config: NotificationConfig::default(),
+            gw2_api_key: String::new(),
         }
     }
 }
@@ -726,6 +739,8 @@ pub fn apply_user_overrides() {
                 user_cfg.oneshot_events.clone(),
                 user_cfg.notification_config.clone(),
                 user_cfg.setup_onboarding_seen,
+                user_cfg.hide_viewer_on_loading_screens,
+                user_cfg.gw2_api_key.clone(),
             ),
         )
     }; // user_cfg lock dropped here
@@ -801,6 +816,8 @@ pub fn apply_user_overrides() {
         runtime.oneshot_events = user_settings.39;
         runtime.notification_config = user_settings.40;
         runtime.setup_onboarding_seen = user_settings.41;
+        runtime.hide_viewer_on_loading_screens = user_settings.42;
+        runtime.gw2_api_key = user_settings.43;
     } // runtime lock dropped here
 }
 
@@ -880,6 +897,7 @@ pub fn extract_user_overrides() {
     user_cfg.copy_with_event_name = runtime.copy_with_event_name;
     user_cfg.show_quick_access_icon = runtime.show_quick_access_icon;
     user_cfg.hide_viewer_in_competitive = runtime.hide_viewer_in_competitive;
+    user_cfg.hide_viewer_on_loading_screens = runtime.hide_viewer_on_loading_screens;
     user_cfg.setup_onboarding_seen = runtime.setup_onboarding_seen;
     user_cfg.time_ruler_interval = runtime.time_ruler_interval;
     user_cfg.time_ruler_show_current_time = runtime.time_ruler_show_current_time;
@@ -889,6 +907,7 @@ pub fn extract_user_overrides() {
     user_cfg.oneshot_events = runtime.oneshot_events.clone();
     user_cfg.notification_config = runtime.notification_config.clone();
     user_cfg.finished_events = export_finished(get_current_unix_time());
+    user_cfg.gw2_api_key = runtime.gw2_api_key.clone();
 }
 
 // === File I/O ===

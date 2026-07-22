@@ -10,6 +10,7 @@ use crate::config::{
     RUNTIME_CONFIG,
     SELECTED_EVENT, SELECTED_TRACK,
 };
+use crate::gw2_api;
 use crate::json_loader::{load_tracks_from_json, EventColor, EventTrack, TimelineEvent};
 use crate::notifications::NOTIFICATION_STATE;
 
@@ -293,8 +294,12 @@ pub fn render_settings(ui: &Ui) {
         );
         ui.checkbox("Show quick access icon", &mut config.show_quick_access_icon);
         ui.checkbox(
-            "Hide event viewer in competitive modes (PvP/WvW)",
+            "Hide event viewer in competitive modes (PvP/WvW, Obsidian Sanctum, Edge of the Mists, Armistice Bastion)",
             &mut config.hide_viewer_in_competitive,
+        );
+        ui.checkbox(
+            "Hide event viewer on login/character-select and loading screens",
+            &mut config.hide_viewer_on_loading_screens,
         );
 
         ui.unindent();
@@ -809,6 +814,38 @@ pub fn render_settings(ui: &Ui) {
             ui.text_disabled(
                 "No events tracked. Right-click events in the timeline to track them.",
             );
+        }
+
+        ui.unindent();
+    }
+
+    // ==================== GW2 API SYNC ====================
+    if ui.collapsing_header("GW2 API Sync", TreeNodeFlags::empty()) {
+        ui.indent();
+
+        ui.text_wrapped(
+            "Enter a GW2 API key with only the \"progression\" permission to \
+             automatically mark today's completed world bosses and map-chest \
+             metas as finished, so you don't have to mark them yourself.",
+        );
+        ui.spacing();
+
+        InputText::new(ui, "API Key", &mut config.gw2_api_key)
+            .password(true)
+            .build();
+
+        if ui.button("Sync Now") {
+            gw2_api::sync_now(config.gw2_api_key.clone());
+        }
+        ui.same_line();
+        if ui.button("Get a Key") {
+            let _ = open::that("https://account.arena.net/applications");
+        }
+
+        let status = gw2_api::SYNC_STATUS.lock().clone();
+        if !status.is_empty() {
+            ui.spacing();
+            ui.text_disabled(&status);
         }
 
         ui.unindent();

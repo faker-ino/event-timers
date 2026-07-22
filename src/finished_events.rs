@@ -46,6 +46,17 @@ pub fn is_event_finished(track_name: &str, event_name: &str, start_time: i64) ->
         .contains(&FinishedOccurrence { event_id, day })
 }
 
+/// Marks an event finished for the reset day containing `start_time`, without
+/// toggling it back off if it's already marked (used for API-driven auto-marking).
+pub fn set_event_finished(track_name: &str, event_name: &str, start_time: i64, current_time: i64) {
+    let event_id = TrackedEventId::new(track_name, event_name);
+    let mut state = FINISHED_EVENTS.lock();
+    state.cleanup_old(current_time);
+
+    let key = FinishedOccurrence { event_id, day: reset_day(start_time) };
+    state.finished.insert(key);
+}
+
 pub fn toggle_event_finished(
     track_name: &str,
     event_name: &str,

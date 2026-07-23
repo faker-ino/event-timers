@@ -15,13 +15,13 @@ use crate::config::TrackedEventId;
 use std::collections::{HashMap as StdHashMap, HashSet as StdHashSet};
 
 // Thread-local storage for right-clicked event info
-// Stores (track_name, event_name, is_currently_tracked, is_oneshot_tracked, is_favorite, occurrence_start_time, is_finished)
+// Stores (track_name, event_name, is_currently_tracked, is_oneshot_tracked, is_favorite, is_finished)
 thread_local! {
-    static CONTEXT_EVENT: RefCell<Option<(String, String, bool, bool, bool, i64, bool)>> = const { RefCell::new(None) };
+    static CONTEXT_EVENT: RefCell<Option<(String, String, bool, bool, bool, bool)>> = const { RefCell::new(None) };
     static OPEN_EVENT_MENU: RefCell<bool> = const { RefCell::new(false) };
     static PENDING_TRACK_TOGGLE: RefCell<Option<(String, String, bool)>> = const { RefCell::new(None) }; // (track, event, is_oneshot)
     static PENDING_FAVORITE_TOGGLE: RefCell<Option<(String, String)>> = const { RefCell::new(None) };
-    static PENDING_FINISHED_TOGGLE: RefCell<Option<(String, String, i64)>> = const { RefCell::new(None) }; // (track, event, occurrence_start_time)
+    static PENDING_FINISHED_TOGGLE: RefCell<Option<(String, String)>> = const { RefCell::new(None) }; // (track, event)
     static PENDING_WIKI_OPEN: RefCell<Option<String>> = const { RefCell::new(None) };
     // Cached membership by track -> event names (avoids per-event TrackedEventId allocations in render loop)
     static CACHED_TRACKED_BY_TRACK: RefCell<StdHashMap<String, StdHashSet<String>>> = RefCell::new(StdHashMap::new());
@@ -50,8 +50,8 @@ pub fn render_main_window(ui: &Ui) {
     }
 
     let pending_finished = PENDING_FINISHED_TOGGLE.with(|p| p.borrow_mut().take());
-    if let Some((track_name, event_name, occurrence_start)) = pending_finished {
-        toggle_event_finished(&track_name, &event_name, occurrence_start, get_current_unix_time());
+    if let Some((track_name, event_name)) = pending_finished {
+        toggle_event_finished(&track_name, &event_name, get_current_unix_time());
     }
 
     // Handle pending wiki open
@@ -195,7 +195,6 @@ pub fn render_main_window(ui: &Ui) {
                         was_tracked,
                         was_oneshot,
                         was_favorite,
-                        occurrence_start,
                         was_finished,
                     )) = e.borrow().clone()
                     {
@@ -241,7 +240,7 @@ pub fn render_main_window(ui: &Ui) {
                             });
                         }
 
-                        // Mark Finished option (per-occurrence, identified by its start time)
+                        // Mark Finished option (applies for the rest of today's reset)
                         let finished_label = if was_finished {
                             format!("Mark Unfinished: {}", event_name)
                         } else {
@@ -250,11 +249,7 @@ pub fn render_main_window(ui: &Ui) {
 
                         if MenuItem::new(&finished_label).build(ui) {
                             PENDING_FINISHED_TOGGLE.with(|p| {
-                                *p.borrow_mut() = Some((
-                                    track_name.clone(),
-                                    event_name.clone(),
-                                    occurrence_start,
-                                ));
+                                *p.borrow_mut() = Some((track_name.clone(), event_name.clone()));
                             });
                         }
 
@@ -1080,8 +1075,7 @@ fn render_timeline_track(
                 && time_in_cycle < event.start_offset + event.duration;
             let is_this_occurrence_active = is_active && time_offset == time_to_event_start;
 
-            let occurrence_start = current_time + time_offset;
-            let is_finished = is_event_finished(&track.name, &event.name, occurrence_start);
+            let is_finished = is_event_finished(&track.name, &event.name, current_time);
 
             let bar_color = if is_finished {
                 [0.3, 0.3, 0.3, (event.color.a * 0.55).max(0.2)]
@@ -1330,8 +1324,7 @@ fn handle_track_tooltip(
                             .get(&track.name)
                             .is_some_and(|set| set.contains(event.name.as_str()))
                     });
-                    let is_finished =
-                        is_event_finished(&track.name, &event.name, this_occurrence_start);
+                    let is_finished = is_event_finished(&track.name, &event.name, current_time);
                     CONTEXT_EVENT.with(|e| {
                         *e.borrow_mut() = Some((
                             track.name.clone(),
@@ -1339,7 +1332,6 @@ fn handle_track_tooltip(
                             is_tracked,
                             is_oneshot,
                             is_favorite,
-                            this_occurrence_start,
                             is_finished,
                         ));
                     });

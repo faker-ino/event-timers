@@ -132,7 +132,7 @@ fn sync_blocking(api_key: &str) {
         for id in &bosses {
             for &(api_id, track, event) in WORLD_BOSS_EVENTS {
                 if id.as_str() == api_id {
-                    set_event_finished(track, event, now, now);
+                    set_event_finished(track, event, now);
                     marked += 1;
                 }
             }
@@ -141,7 +141,7 @@ fn sync_blocking(api_key: &str) {
         for id in &chests {
             for &(api_id, track, event) in MAP_CHEST_EVENTS {
                 if id.as_str() == api_id {
-                    set_event_finished(track, event, now, now);
+                    set_event_finished(track, event, now);
                     marked += 1;
                 }
             }

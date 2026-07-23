@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::finished_events::{export_finished, import_finished, FinishedOccurrence};
+use crate::finished_events::{export_finished, import_finished};
 use crate::json_loader::{load_tracks_from_json, EventTrack};
 use crate::time_utils::get_current_unix_time;
 
@@ -395,15 +395,36 @@ pub struct UserConfig {
     #[serde(default)]
     pub notification_config: NotificationConfig,
 
-    /// Events manually marked "finished" for the current GW2 reset day.
-    /// Stale entries (prior reset days) are dropped on load/save.
+    /// Events marked "finished" (manually or via API sync) for the current GW2
+    /// reset day. Discarded wholesale on load/save if `finished_events_day` is stale.
+    /// Lenient: older saves stored a different shape here, and a shape mismatch on
+    /// this field alone must not fail parsing of the rest of the user's config.
+    #[serde(default, deserialize_with = "deserialize_finished_events_lenient")]
+    pub finished_events: HashSet<TrackedEventId>,
+
+    /// The GW2 reset day (see `finished_events::reset_day`) that `finished_events`
+    /// was last saved for.
     #[serde(default)]
-    pub finished_events: HashSet<FinishedOccurrence>,
+    pub finished_events_day: i64,
 
     /// GW2 API key (needs only the "progression" permission) used to
     /// automatically mark completed world bosses / map chests as finished.
     #[serde(default)]
     pub gw2_api_key: String,
+}
+
+/// Deserializes `finished_events`, falling back to an empty set instead of
+/// propagating an error if the stored shape doesn't match (e.g. saves from
+/// before the finished-events format changed) — a bad entry here shouldn't
+/// take the rest of the user's config down with it.
+fn deserialize_finished_events_lenient<'de, D>(
+    deserializer: D,
+) -> Result<HashSet<TrackedEventId>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 fn default_global_track_bg() -> [f32; 4] {
@@ -543,6 +564,7 @@ impl Default for UserConfig {
             oneshot_events: HashSet::new(),
             notification_config: NotificationConfig::default(),
             finished_events: HashSet::new(),
+            finished_events_day: 0,
             gw2_api_key: String::new(),
         }
     }
@@ -906,7 +928,9 @@ pub fn extract_user_overrides() {
     user_cfg.favorite_events = runtime.favorite_events.clone();
     user_cfg.oneshot_events = runtime.oneshot_events.clone();
     user_cfg.notification_config = runtime.notification_config.clone();
-    user_cfg.finished_events = export_finished(get_current_unix_time());
+    let (finished_events, finished_events_day) = export_finished(get_current_unix_time());
+    user_cfg.finished_events = finished_events;
+    user_cfg.finished_events_day = finished_events_day;
     user_cfg.gw2_api_key = runtime.gw2_api_key.clone();
 }
 
@@ -921,7 +945,11 @@ pub fn load_user_config() {
         if path.exists() {
             if let Ok(json_str) = fs::read_to_string(&path) {
                 if let Ok(loaded) = serde_json::from_str::<UserConfig>(&json_str) {
-                    import_finished(loaded.finished_events.clone(), get_current_unix_time());
+                    import_finished(
+                        loaded.finished_events.clone(),
+                        loaded.finished_events_day,
+                        get_current_unix_time(),
+                    );
                     *USER_CONFIG.lock() = loaded;
                     apply_user_overrides();
                     return;

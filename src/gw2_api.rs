@@ -1,8 +1,10 @@
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use crate::finished_events::set_event_finished;
+use crate::config::TrackedEventId;
+use crate::finished_events::sync_domain_finished;
 use crate::time_utils::get_current_unix_time;
 
 const WORLDBOSSES_URL: &str = "https://api.guildwars2.com/v2/account/worldbosses";
@@ -127,25 +129,30 @@ fn sync_blocking(api_key: &str) {
         };
 
         let now = get_current_unix_time();
-        let mut marked = 0;
 
-        for id in &bosses {
-            for &(api_id, track, event) in WORLD_BOSS_EVENTS {
-                if id.as_str() == api_id {
-                    set_event_finished(track, event, now);
-                    marked += 1;
-                }
-            }
-        }
+        let boss_domain: Vec<TrackedEventId> = WORLD_BOSS_EVENTS
+            .iter()
+            .map(|&(_, track, event)| TrackedEventId::new(track, event))
+            .collect();
+        let completed_bosses: HashSet<TrackedEventId> = WORLD_BOSS_EVENTS
+            .iter()
+            .filter(|&&(api_id, _, _)| bosses.iter().any(|id| id == api_id))
+            .map(|&(_, track, event)| TrackedEventId::new(track, event))
+            .collect();
+        sync_domain_finished(&boss_domain, &completed_bosses, now);
 
-        for id in &chests {
-            for &(api_id, track, event) in MAP_CHEST_EVENTS {
-                if id.as_str() == api_id {
-                    set_event_finished(track, event, now);
-                    marked += 1;
-                }
-            }
-        }
+        let chest_domain: Vec<TrackedEventId> = MAP_CHEST_EVENTS
+            .iter()
+            .map(|&(_, track, event)| TrackedEventId::new(track, event))
+            .collect();
+        let completed_chests: HashSet<TrackedEventId> = MAP_CHEST_EVENTS
+            .iter()
+            .filter(|&&(api_id, _, _)| chests.iter().any(|id| id == api_id))
+            .map(|&(_, track, event)| TrackedEventId::new(track, event))
+            .collect();
+        sync_domain_finished(&chest_domain, &completed_chests, now);
+
+        let marked = completed_bosses.len() + completed_chests.len();
 
         let msg = format!(
             "GW2 API sync OK: {} boss(es), {} chest(s) reported by API, {} event(s) marked finished.",

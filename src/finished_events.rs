@@ -43,13 +43,29 @@ pub fn is_event_finished(track_name: &str, event_name: &str, current_time: i64) 
     state.finished.contains(&event_id)
 }
 
-/// Marks an event finished for today, without toggling it back off if it's
-/// already marked (used for API-driven auto-marking).
-pub fn set_event_finished(track_name: &str, event_name: &str, current_time: i64) {
-    let event_id = TrackedEventId::new(track_name, event_name);
+/// Reconciles a set of events an external source (the GW2 API) can report on
+/// against what it currently reports as complete, both marking newly-completed
+/// entries finished and UNMARKING ones that are no longer reported — necessary
+/// because `/v2/account/worldbosses` and `/v2/account/mapchests` are known to lag
+/// a few minutes behind the actual daily reset, so a sync landing in that window
+/// can report yesterday's completions as still done. Since finished-event state
+/// is otherwise only cleared on the next reset day, that false mark would
+/// otherwise stick for the rest of the day even after the API catches up.
+/// Entries outside `domain` (e.g. manually toggled events) are left untouched.
+pub fn sync_domain_finished(
+    domain: &[TrackedEventId],
+    completed: &HashSet<TrackedEventId>,
+    current_time: i64,
+) {
     let mut state = FINISHED_EVENTS.lock();
     state.roll_reset(current_time);
-    state.finished.insert(event_id);
+    for id in domain {
+        if completed.contains(id) {
+            state.finished.insert(id.clone());
+        } else {
+            state.finished.remove(id);
+        }
+    }
 }
 
 pub fn toggle_event_finished(track_name: &str, event_name: &str, current_time: i64) {
